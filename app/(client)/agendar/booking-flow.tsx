@@ -2,26 +2,33 @@
 
 import { ErrorState, LoadingState } from "@/components/api-state";
 import { PageHeader } from "@/components/page-header";
+import { useTenant } from "@/contexts/tenant-context";
+import { tenantHref } from "@/lib/tenant-paths";
 import {
   formatCurrency,
   formatShortDate,
   getAvailableDates,
+  professionals as fallbackProfessionals,
+  services as fallbackServices,
   timeSlots,
   type Professional,
   type Service,
 } from "@/lib/mock-data";
 import {
   api,
+  buildStartTimeIso,
   getErrorMessage,
   mapApiProfessional,
   mapApiService,
 } from "@/services/api";
 import {
+  AlertCircle,
   CalendarDays,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Loader2,
   Scissors,
   Sparkles,
   Star,
@@ -37,67 +44,159 @@ const steps = [
   "Confirmação",
 ] as const;
 
+const API_LOAD_TIMEOUT_MS = 8_000;
+
 type BookingStep = 1 | 2 | 3 | 4;
 
-export function BookingFlow() {
+type BookingCatalog = {
+  services: Service[];
+  professionals: Professional[];
+  clientId: string | null;
+  fromApi: boolean;
+};
+
+async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("A API demorou para responder.")),
+          ms,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+type BookingFlowProps = {
+  embedded?: boolean;
+};
+
+export function BookingFlow({ embedded = false }: BookingFlowProps) {
+  const { tenant, loading: tenantLoading } = useTenant();
+  const tenantId = tenant.id === "local" ? undefined : tenant.id;
+  const homeHref = tenantHref(tenant.slug);
+  const clientHref = "/cliente";
+  const frameClass = embedded
+    ? "relative flex flex-1 flex-col pt-2"
+    : "relative flex flex-1 flex-col px-5 pb-8 pt-8";
   const availableDates = useMemo(() => getAvailableDates(), []);
+
   const [step, setStep] = useState<BookingStep>(1);
   const [services, setServices] = useState<Service[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [fromApi, setFromApi] = useState(false);
+  const [usingFallback, setUsingFallback] = useState(false);
+  const [catalogWarning, setCatalogWarning] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedProfessional, setSelectedProfessional] =
     useState<Professional | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(availableDates[0]);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [confirmedSummary, setConfirmedSummary] = useState<string | null>(null);
+
+  const applyCatalog = useCallback((catalog: BookingCatalog, warning?: string) => {
+    setServices(catalog.services);
+    setProfessionals(catalog.professionals);
+    setClientId(catalog.clientId);
+    setFromApi(catalog.fromApi);
+    setUsingFallback(!catalog.fromApi);
+    setCatalogWarning(warning ?? null);
+    setError(null);
+  }, []);
 
   const loadBookingData = useCallback(async () => {
+    if (tenantLoading) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
+    setCatalogWarning(null);
 
     try {
-      const [servicesResponse, professionalsResponse] = await Promise.all([
-        api.getServices(),
-        api.getUsers({ role: "STAFF" }),
-      ]);
-
-      setServices(servicesResponse.map(mapApiService));
-      setProfessionals(professionalsResponse.map(mapApiProfessional));
+      const catalog = await withTimeout(fetchBookingCatalog(tenantId), API_LOAD_TIMEOUT_MS);
+      applyCatalog(catalog);
     } catch (requestError) {
-      setError(getErrorMessage(requestError));
+      const message = getErrorMessage(requestError);
+      applyCatalog(
+        {
+          services: fallbackServices,
+          professionals: fallbackProfessionals,
+          clientId: null,
+          fromApi: false,
+        },
+        `${message} Exibindo catálogo local — a confirmação exige a API.`,
+      );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyCatalog, tenantId, tenantLoading]);
 
   useEffect(() => {
-    let cancelled = false;
+    void loadBookingData();
+  }, [loadBookingData]);
 
-    Promise.all([api.getServices(), api.getUsers({ role: "STAFF" })])
-      .then(([servicesResponse, professionalsResponse]) => {
-        if (cancelled) {
-          return;
-        }
+  async function handleConfirm() {
+    if (!selectedService || !selectedProfessional || !selectedTime) {
+      setSubmitError("Revise serviço, profissional e horário antes de confirmar.");
+      return;
+    }
 
-        setServices(servicesResponse.map(mapApiService));
-        setProfessionals(professionalsResponse.map(mapApiProfessional));
-        setLoading(false);
-      })
-      .catch((requestError: unknown) => {
-        if (cancelled) {
-          return;
-        }
+    if (!fromApi || !tenantId) {
+      setSubmitError(
+        "Não foi possível conectar à API. Verifique se o backend está em http://localhost:3000 e tente novamente.",
+      );
+      return;
+    }
 
-        setError(getErrorMessage(requestError));
-        setLoading(false);
+    if (!clientId) {
+      setSubmitError(
+        "Nenhum cliente cadastrado no tenant. Crie um usuário CUSTOMER via POST /users.",
+      );
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      await api.createAppointment({
+        tenantId,
+        clientId,
+        professionalId: selectedProfessional.id,
+        serviceId: selectedService.id,
+        startTime: buildStartTimeIso(selectedDate, selectedTime),
+        status: "CONFIRMED",
       });
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+      setConfirmedSummary(
+        `${selectedService.name} com ${selectedProfessional.name} em ${formatShortDate(selectedDate)} às ${selectedTime}.`,
+      );
+      setConfirmed(true);
+    } catch (requestError) {
+      setSubmitError(
+        getFriendlySubmitError(getErrorMessage(requestError)),
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   const canContinue =
     (step === 1 && selectedService !== null) ||
@@ -114,16 +213,31 @@ export function BookingFlow() {
   function handleBack() {
     if (step > 1) {
       setStep((current) => (current - 1) as BookingStep);
+      setSubmitError(null);
     }
   }
 
-  if (loading) {
+  const heading = embedded ? (
+    <div className="mb-6">
+      <h2 className="text-xl font-bold tracking-tight text-zinc-50">
+        Agendar horário
+      </h2>
+      <p className="mt-1 text-sm text-zinc-400">
+        {tenant.name} · escolha serviço, profissional e horário
+      </p>
+    </div>
+  ) : (
+    <PageHeader
+      title="Agendar horário"
+      subtitle={`${tenant.name} · passo a passo`}
+      backHref={homeHref}
+    />
+  );
+
+  if (tenantLoading || loading) {
     return (
-      <div className="relative flex flex-1 flex-col px-5 pb-8 pt-8">
-        <PageHeader
-          title="Agendar horário"
-          subtitle="Studio Barbearia · passo a passo"
-        />
+      <div className={frameClass}>
+        {heading}
         <LoadingState message="Carregando serviços e profissionais..." />
       </div>
     );
@@ -131,19 +245,16 @@ export function BookingFlow() {
 
   if (error) {
     return (
-      <div className="relative flex flex-1 flex-col px-5 pb-8 pt-8">
-        <PageHeader
-          title="Agendar horário"
-          subtitle="Studio Barbearia · passo a passo"
-        />
+      <div className={frameClass}>
+        {heading}
         <ErrorState message={error} onRetry={() => void loadBookingData()} />
       </div>
     );
   }
 
-  if (confirmed && selectedService && selectedProfessional && selectedTime) {
+  if (confirmed) {
     return (
-      <div className="relative flex flex-1 flex-col px-5 pb-8 pt-8">
+      <div className={frameClass}>
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           <span className="inline-flex size-20 items-center justify-center rounded-3xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
             <CheckCircle2 className="size-10" strokeWidth={2.2} />
@@ -152,17 +263,19 @@ export function BookingFlow() {
             Agendamento confirmado!
           </h1>
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-zinc-400">
-            {selectedService.name} com {selectedProfessional.name} em{" "}
-            {formatShortDate(selectedDate)} às {selectedTime}.
+            {confirmedSummary}
+          </p>
+          <p className="mt-2 text-xs text-emerald-400/90">
+            Salvo com sucesso no servidor.
           </p>
           <Link
-            href="/cliente"
+            href={clientHref}
             className="mt-8 inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 px-5 py-4 text-sm font-semibold text-zinc-950"
           >
             Ver na Área do Cliente
           </Link>
           <Link
-            href="/"
+            href={homeHref}
             className="mt-3 inline-flex w-full items-center justify-center rounded-2xl border border-zinc-800 px-5 py-3 text-sm font-medium text-zinc-300"
           >
             Voltar ao início
@@ -173,11 +286,24 @@ export function BookingFlow() {
   }
 
   return (
-    <div className="relative flex flex-1 flex-col px-5 pb-8 pt-8">
-      <PageHeader
-        title="Agendar horário"
-        subtitle="Studio Barbearia · passo a passo"
-      />
+    <div className={frameClass}>
+      {heading}
+
+      {catalogWarning || usingFallback ? (
+        <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          <AlertCircle className="mt-0.5 size-4 shrink-0 text-amber-400" />
+          <div className="min-w-0 flex-1">
+            <p>{catalogWarning ?? "Usando dados locais temporariamente."}</p>
+            <button
+              type="button"
+              onClick={() => void loadBookingData()}
+              className="mt-1 text-xs font-medium text-amber-300 underline"
+            >
+              Tentar conectar à API novamente
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mb-6 grid grid-cols-4 gap-2">
         {steps.map((label, index) => {
@@ -385,10 +511,20 @@ export function BookingFlow() {
                 icon={CalendarDays}
                 label="Data e horário"
                 value={`${formatShortDate(selectedDate)} · ${selectedTime}`}
-                detail="Studio Barbearia"
+                detail={tenant.name}
               />
             </div>
           </div>
+
+          {submitError ? (
+            <div
+              role="alert"
+              className="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+            >
+              <AlertCircle className="mt-0.5 size-4 shrink-0 text-red-400" />
+              <p>{submitError}</p>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -397,7 +533,8 @@ export function BookingFlow() {
           <button
             type="button"
             onClick={handleBack}
-            className="inline-flex flex-1 items-center justify-center gap-1 rounded-2xl border border-zinc-800 px-4 py-4 text-sm font-medium text-zinc-300 transition hover:border-zinc-700"
+            disabled={submitting}
+            className="inline-flex flex-1 items-center justify-center gap-1 rounded-2xl border border-zinc-800 px-4 py-4 text-sm font-medium text-zinc-300 transition hover:border-zinc-700 disabled:opacity-40"
           >
             <ChevronLeft className="size-4" />
             Voltar
@@ -417,17 +554,58 @@ export function BookingFlow() {
         ) : (
           <button
             type="button"
-            disabled={!canContinue}
-            onClick={() => setConfirmed(true)}
+            disabled={!canContinue || submitting}
+            onClick={() => void handleConfirm()}
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 px-4 py-4 text-sm font-semibold text-zinc-950 transition enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <Sparkles className="size-4" />
-            Confirmar agendamento
+            {submitting ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Confirmando...
+              </>
+            ) : (
+              <>
+                <Sparkles className="size-4" />
+                Confirmar agendamento
+              </>
+            )}
           </button>
         )}
       </div>
     </div>
   );
+}
+
+async function fetchBookingCatalog(
+  tenantId?: string,
+): Promise<BookingCatalog> {
+  const [servicesResponse, professionalsResponse, customersResponse] =
+    await Promise.all([
+      api.getServices(tenantId),
+      api.getUsers({ role: "PROFESSIONAL", tenantId }),
+      api.getUsers({ role: "CUSTOMER", tenantId }),
+    ]);
+
+  return {
+    services: servicesResponse.map(mapApiService),
+    professionals: professionalsResponse.map(mapApiProfessional),
+    clientId: customersResponse[0]?.id ?? null,
+    fromApi: true,
+  };
+}
+
+function getFriendlySubmitError(message: string): string {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("indisponível") || normalized.includes("conflito")) {
+    return "Esse horário acabou de ficar indisponível. Escolha outro horário e tente novamente.";
+  }
+
+  if (normalized.includes("network") || normalized.includes("fetch")) {
+    return "Não foi possível falar com o servidor. Confira se a API está rodando na porta 3000.";
+  }
+
+  return message || "Não foi possível confirmar o agendamento. Tente novamente.";
 }
 
 type SummaryRowProps = {

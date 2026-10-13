@@ -1,5 +1,5 @@
+import { DemoEnvironmentBanner } from "@/components/demo-environment-banner";
 import { TenantProvider } from "@/contexts/tenant-context";
-import { AppShell } from "@/components/app-shell";
 import { SerwistProvider } from "@serwist/turbopack/react";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -49,9 +49,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full bg-zinc-950 font-sans text-zinc-100">
         <SerwistProvider swUrl="/serwist/sw.js">
-          <TenantProvider>
-            <AppShell>{children}</AppShell>
-          </TenantProvider>
+          <DemoEnvironmentBanner />
+          <TenantProvider>{children}</TenantProvider>
         </SerwistProvider>
       </body>
     </html>

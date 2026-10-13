@@ -2,7 +2,7 @@
 
 import { ErrorState, LoadingState } from "@/components/api-state";
 import { AdminNav } from "@/components/admin-nav";
-import { AccentIconWrap } from "@/components/app-shell";
+import { AccentIconWrap } from "@/components/shell/accent-ui";
 import { TenantBadge } from "@/components/tenant-brand";
 import { useTenant } from "@/contexts/tenant-context";
 import { cn } from "@/lib/cn";
@@ -87,7 +87,7 @@ export function AdminDashboard() {
 
     try {
       const [staffResponse, servicesResponse] = await Promise.all([
-        api.getUsers({ role: "STAFF", tenantId }),
+        api.getUsers({ role: "PROFESSIONAL", tenantId }),
         api.getServices(tenantId),
       ]);
 
@@ -120,15 +120,15 @@ export function AdminDashboard() {
   }, [staff]);
 
   return (
-    <div className="relative flex flex-1 flex-col px-5 pb-4 pt-6">
-      <header className="mb-6">
+    <div className="relative flex flex-1 flex-col px-4 pb-4 pt-6 sm:px-6 lg:px-10 xl:px-12">
+      <header className="mb-6 lg:mb-8">
         <TenantBadge />
         <p className="mt-4 text-sm text-zinc-400">
           Gestão do estabelecimento · {tenant.slug}
         </p>
       </header>
 
-      <AdminNav />
+      <AdminNav className="mb-6 lg:hidden" />
 
       <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
         {tabs.map((tab) => (
@@ -149,8 +149,8 @@ export function AdminDashboard() {
       </div>
 
       {activeTab === "overview" ? (
-        <section className="space-y-4">
-          <div className="grid gap-3">
+        <section className="space-y-4 xl:space-y-6">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {overviewMetrics.map((metric) => (
               <article
                 key={metric.label}
@@ -187,7 +187,7 @@ export function AdminDashboard() {
               Simule a identidade visual do tenant. As cores são aplicadas em
               tempo real no app cliente e no painel.
             </p>
-            <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
               {themePresets.map((preset) => (
                 <button
                   key={preset.name}
@@ -217,6 +217,7 @@ export function AdminDashboard() {
             <ErrorState message={dataError} onRetry={() => void loadAdminData()} />
           ) : (
             <>
+              <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
                 <div className="mb-4 flex items-center gap-2">
                   <Users className="size-4 text-[var(--accent)]" />
@@ -243,7 +244,7 @@ export function AdminDashboard() {
                   ))}
                   {staff.length === 0 ? (
                     <p className="text-sm text-zinc-500">
-                      Nenhum profissional STAFF cadastrado na API.
+                      Nenhum profissional cadastrado na API.
                     </p>
                   ) : null}
                 </div>
@@ -273,6 +274,7 @@ export function AdminDashboard() {
                   ))}
                 </div>
               </div>
+              </div>
             </>
           )}
         </section>
@@ -289,7 +291,8 @@ export function AdminDashboard() {
               Nenhum serviço cadastrado para este estabelecimento.
             </p>
           ) : (
-            services.map((service) => (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {services.map((service) => (
               <article
                 key={service.id}
                 className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4"
@@ -322,7 +325,8 @@ export function AdminDashboard() {
                   Editar preço e duração
                 </button>
               </article>
-            ))
+            ))}
+            </div>
           )}
         </section>
       ) : null}

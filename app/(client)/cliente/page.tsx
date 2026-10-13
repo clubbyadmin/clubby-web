@@ -3,7 +3,7 @@ import { ClientArea } from "./client-area";
 
 export const metadata: Metadata = {
   title: "Área do Cliente",
-  description: "Acompanhe agendamentos e histórico no Studio Barbearia.",
+  description: "Perfil, plano do clube, agendamentos e histórico.",
 };
 
 export default function ClientePage() {

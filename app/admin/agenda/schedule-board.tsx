@@ -2,14 +2,14 @@
 
 import { LoadingState } from "@/components/api-state";
 import { AdminNav } from "@/components/admin-nav";
-import { AccentIconWrap } from "@/components/app-shell";
+import { AccentIconWrap } from "@/components/shell/accent-ui";
 import { TenantBadge } from "@/components/tenant-brand";
 import { useTenant } from "@/contexts/tenant-context";
+import { StaffSelect } from "@/components/staff-select";
 import { cn } from "@/lib/cn";
 import {
   appointmentCoversSlot,
   appointmentStartsAtSlot,
-  createInitialAppointments,
   formatDateKey,
   formatDisplayDate,
   generateTimeSlots,
@@ -19,7 +19,15 @@ import {
   statusStyles,
   type ScheduleAppointment,
 } from "@/lib/schedule-data";
-import { api, getErrorMessage } from "@/services/api";
+import {
+  api,
+  buildStartTimeIso,
+  dayRangeIso,
+  getErrorMessage,
+  mapApiAppointmentToSchedule,
+  type ApiWaitlistEntry,
+} from "@/services/api";
+import { WaitlistPanel } from "./waitlist-panel";
 import {
   CalendarPlus,
   ChevronLeft,
@@ -30,24 +38,24 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
 type StaffMember = {
   id: string;
   name: string;
+  email: string | null;
 };
 
-const EXTRA_STAFF: StaffMember[] = [
-  { id: "staff-ana", name: "Ana Manicure" },
-];
+type ServiceOption = {
+  id: string;
+  name: string;
+  durationMinutes: number;
+};
 
-const SERVICE_OPTIONS = [
-  "Corte Cabelo",
-  "Barba",
-  "Combo Completo",
-  "Manicure",
-];
+type CustomerOption = {
+  id: string;
+  name: string;
+};
 
 export function ScheduleBoard() {
   const { tenant } = useTenant();
@@ -55,22 +63,32 @@ export function ScheduleBoard() {
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [selectedStaffId, setSelectedStaffId] = useState<string>("all");
   const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [appointmentsByDate, setAppointmentsByDate] = useState<
-    Record<string, ScheduleAppointment[]>
-  >({});
+  const [services, setServices] = useState<ServiceOption[]>([]);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [dayAppointments, setDayAppointments] = useState<ScheduleAppointment[]>(
+    [],
+  );
+  const [waitlist, setWaitlist] = useState<ApiWaitlistEntry[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(true);
+  const [loadingAppointments, setLoadingAppointments] = useState(true);
+  const [loadingWaitlist, setLoadingWaitlist] = useState(false);
+  const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
+  const [emptyChairNotice, setEmptyChairNotice] = useState<string | null>(null);
   const [staffError, setStaffError] = useState<string | null>(null);
+  const [appointmentsError, setAppointmentsError] = useState<string | null>(
+    null,
+  );
   const [walkInOpen, setWalkInOpen] = useState(false);
+  const [walkInSubmitting, setWalkInSubmitting] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [walkInForm, setWalkInForm] = useState({
-    customerName: "",
-    serviceName: SERVICE_OPTIONS[0],
+    clientId: "",
+    serviceId: "",
     staffId: "",
     startTime: "09:00",
   });
 
-  const dateKey = formatDateKey(selectedDate);
   const timeSlots = useMemo(() => generateTimeSlots(), []);
 
   const loadStaff = useCallback(async () => {
@@ -78,82 +96,110 @@ export function ScheduleBoard() {
     setStaffError(null);
 
     try {
-      const response = await api.getUsers({ role: "STAFF", tenantId });
-      const mapped = response.map((user) => ({ id: user.id, name: user.name }));
-      const merged = [...mapped];
+      const [staffResponse, servicesResponse, customersResponse] =
+        await Promise.all([
+          api.getUsers({ role: "PROFESSIONAL", tenantId }),
+          api.getServices(tenantId),
+          api.getUsers({ role: "CUSTOMER", tenantId }),
+        ]);
 
-      EXTRA_STAFF.forEach((extra) => {
-        if (!merged.some((member) => member.name === extra.name)) {
-          merged.push(extra);
-        }
-      });
+      const mappedStaff = staffResponse.map((user) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      }));
+      const mappedServices = servicesResponse.map((service) => ({
+        id: service.id,
+        name: service.name,
+        durationMinutes: service.durationMin,
+      }));
+      const mappedCustomers = customersResponse.map((user) => ({
+        id: user.id,
+        name: user.name,
+      }));
 
-      setStaff(merged);
+      setStaff(mappedStaff);
+      setServices(mappedServices);
+      setCustomers(mappedCustomers);
       setWalkInForm((current) => ({
         ...current,
-        staffId: current.staffId || merged[0]?.id || "",
+        staffId: current.staffId || mappedStaff[0]?.id || "",
+        serviceId: current.serviceId || mappedServices[0]?.id || "",
+        clientId: current.clientId || mappedCustomers[0]?.id || "",
       }));
     } catch (requestError) {
       setStaffError(getErrorMessage(requestError));
-      setStaff(EXTRA_STAFF);
+      setStaff([]);
     } finally {
       setLoadingStaff(false);
     }
   }, [tenantId]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadAppointments = useCallback(async () => {
+    if (!tenantId) {
+      setDayAppointments([]);
+      setLoadingAppointments(false);
+      return;
+    }
 
-    api
-      .getUsers({ role: "STAFF", tenantId })
-      .then((response) => {
-        if (cancelled) {
-          return;
-        }
+    setLoadingAppointments(true);
+    setAppointmentsError(null);
 
-        const mapped = response.map((user) => ({ id: user.id, name: user.name }));
-        const merged = [...mapped];
-
-        EXTRA_STAFF.forEach((extra) => {
-          if (!merged.some((member) => member.name === extra.name)) {
-            merged.push(extra);
-          }
-        });
-
-        setStaff(merged);
-        setWalkInForm((current) => ({
-          ...current,
-          staffId: current.staffId || merged[0]?.id || "",
-        }));
-        setLoadingStaff(false);
-      })
-      .catch((requestError: unknown) => {
-        if (cancelled) {
-          return;
-        }
-
-        setStaffError(getErrorMessage(requestError));
-        setStaff(EXTRA_STAFF);
-        setLoadingStaff(false);
+    try {
+      const range = dayRangeIso(selectedDate);
+      const response = await api.getAppointments({
+        tenantId,
+        from: range.from,
+        to: range.to,
       });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [tenantId]);
+      setDayAppointments(response.map(mapApiAppointmentToSchedule));
+    } catch (requestError) {
+      setAppointmentsError(getErrorMessage(requestError));
+      setDayAppointments([]);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  }, [selectedDate, tenantId]);
 
-  const staffList = staff.length > 0 ? staff : EXTRA_STAFF;
+  const loadWaitlist = useCallback(async () => {
+    if (!tenantId) {
+      setWaitlist([]);
+      return;
+    }
 
-  const seededDayAppointments = useMemo(
-    () => createInitialAppointments(dateKey, staffList),
-    [dateKey, staffList],
-  );
+    setLoadingWaitlist(true);
 
-  const dayAppointments = appointmentsByDate[dateKey] ?? seededDayAppointments;
+    try {
+      const response = await api.getWaitlist({
+        tenantId,
+        date: formatDateKey(selectedDate),
+        status: "WAITING",
+      });
+      setWaitlist(response);
+    } catch (requestError) {
+      setAppointmentsError(getErrorMessage(requestError));
+      setWaitlist([]);
+    } finally {
+      setLoadingWaitlist(false);
+    }
+  }, [selectedDate, tenantId]);
+
+  useEffect(() => {
+    void loadStaff();
+  }, [loadStaff]);
+
+  useEffect(() => {
+    void loadAppointments();
+  }, [loadAppointments]);
+
+  useEffect(() => {
+    void loadWaitlist();
+  }, [loadWaitlist]);
 
   const visibleStaff = useMemo(() => {
     if (selectedStaffId === "all") {
-      return staff.length > 0 ? staff : EXTRA_STAFF;
+      return staff;
     }
 
     return staff.filter((member) => member.id === selectedStaffId);
@@ -170,12 +216,6 @@ export function ScheduleBoard() {
     );
   }, [dayAppointments, selectedStaffId]);
 
-  function getSeededDay(
-    current: Record<string, ScheduleAppointment[]>,
-  ): ScheduleAppointment[] {
-    return current[dateKey] ?? seededDayAppointments;
-  }
-
   function shiftDate(days: number) {
     setSelectedDate((current) => {
       const next = new Date(current);
@@ -184,86 +224,120 @@ export function ScheduleBoard() {
     });
   }
 
-  function updateAppointment(
-    appointmentId: string,
-    updater: (appointment: ScheduleAppointment) => ScheduleAppointment,
-  ) {
-    setAppointmentsByDate((current) => {
-      const dayList = getSeededDay(current);
-
-      return {
-        ...current,
-        [dateKey]: dayList.map((appointment) =>
-          appointment.id === appointmentId
-            ? updater(appointment)
-            : appointment,
-        ),
-      };
-    });
+  async function handleComplete(appointmentId: string) {
     setActiveMenuId(null);
+
+    try {
+      await api.updateAppointment(appointmentId, { status: "COMPLETED" });
+      await loadAppointments();
+    } catch (requestError) {
+      setAppointmentsError(getErrorMessage(requestError));
+    }
   }
 
-  function handleComplete(appointmentId: string) {
-    updateAppointment(appointmentId, (appointment) => ({
-      ...appointment,
-      status: "COMPLETED",
-    }));
+  async function handleCancel(appointmentId: string) {
+    setActiveMenuId(null);
+    setEmptyChairNotice(null);
+
+    try {
+      const result = await api.cancelAppointment(appointmentId);
+      await Promise.all([loadAppointments(), loadWaitlist()]);
+
+      if (result.emptyChair.filled && result.emptyChair.waitlistEntry) {
+        const entry = result.emptyChair.waitlistEntry;
+        setEmptyChairNotice(
+          `Cadeira preenchida: ${entry.client.name} entrou às ${entry.targetTimeSlot} (${entry.service.name}).`,
+        );
+      }
+    } catch (requestError) {
+      setAppointmentsError(getErrorMessage(requestError));
+    }
   }
 
-  function handleCancel(appointmentId: string) {
-    updateAppointment(appointmentId, (appointment) => ({
-      ...appointment,
-      status: "CANCELLED",
-    }));
+  async function handleJoinWaitlist(form: {
+    clientId: string;
+    serviceId: string;
+    staffId: string;
+    startTime: string;
+  }) {
+    if (!tenantId || !form.clientId || !form.serviceId) {
+      setAppointmentsError("Selecione cliente e serviço para entrar na fila.");
+      return;
+    }
+
+    setWaitlistSubmitting(true);
+    setAppointmentsError(null);
+
+    try {
+      await api.joinWaitlist({
+        tenantId,
+        clientId: form.clientId,
+        serviceId: form.serviceId,
+        preferredProfessionalId:
+          form.staffId && form.staffId !== "all" ? form.staffId : null,
+        targetDate: formatDateKey(selectedDate),
+        targetTimeSlot: form.startTime,
+      });
+      await loadWaitlist();
+    } catch (requestError) {
+      setAppointmentsError(getErrorMessage(requestError));
+      throw requestError;
+    } finally {
+      setWaitlistSubmitting(false);
+    }
   }
 
-  function handleReschedule(appointmentId: string, newStartTime: string) {
-    const [hours, minutes] = newStartTime.split(":").map(Number);
-
-    updateAppointment(appointmentId, (appointment) => ({
-      ...appointment,
-      startMinutes: hours * 60 + minutes,
-      status: appointment.status === "PENDING" ? "CONFIRMED" : appointment.status,
-    }));
+  async function handleReschedule(appointmentId: string, newStartTime: string) {
     setRescheduleId(null);
+
+    try {
+      await api.updateAppointment(appointmentId, {
+        startTime: buildStartTimeIso(selectedDate, newStartTime),
+        status: "CONFIRMED",
+      });
+      await loadAppointments();
+    } catch (requestError) {
+      setAppointmentsError(getErrorMessage(requestError));
+    }
   }
 
-  function handleWalkInSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleWalkInSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const selectedStaffMember =
-      staff.find((member) => member.id === walkInForm.staffId) ??
-      EXTRA_STAFF[0];
-    const [hours, minutes] = walkInForm.startTime.split(":").map(Number);
+    if (!tenantId || !walkInForm.clientId || !walkInForm.serviceId) {
+      setAppointmentsError(
+        "Selecione cliente e serviço para confirmar o encaixe.",
+      );
+      return;
+    }
 
-    const newAppointment: ScheduleAppointment = {
-      id: `walkin-${Date.now()}`,
-      staffId: selectedStaffMember.id,
-      staffName: selectedStaffMember.name,
-      customerName: walkInForm.customerName.trim() || "Cliente Walk-in",
-      serviceName: walkInForm.serviceName,
-      dateKey,
-      startMinutes: hours * 60 + minutes,
-      durationMinutes: 30,
-      status: "CONFIRMED",
-    };
+    setWalkInSubmitting(true);
+    setAppointmentsError(null);
 
-    setAppointmentsByDate((current) => {
-      const dayList = getSeededDay(current);
+    try {
+      await api.createAppointment({
+        tenantId,
+        clientId: walkInForm.clientId,
+        professionalId: walkInForm.staffId,
+        serviceId: walkInForm.serviceId,
+        startTime: buildStartTimeIso(selectedDate, walkInForm.startTime),
+        status: "CONFIRMED",
+      });
 
-      return {
+      setWalkInOpen(false);
+      setWalkInForm((current) => ({
         ...current,
-        [dateKey]: [...dayList, newAppointment],
-      };
-    });
-
-    setWalkInOpen(false);
-    setWalkInForm({
-      customerName: "",
-      serviceName: SERVICE_OPTIONS[0],
-      staffId: staff[0]?.id ?? EXTRA_STAFF[0].id,
-      startTime: "09:00",
-    });
+        clientId: customers[0]?.id ?? "",
+        serviceId: services[0]?.id ?? "",
+        staffId: staff[0]?.id ?? "",
+        startTime: "09:00",
+      }));
+      await loadAppointments();
+    } catch (requestError) {
+      setAppointmentsError(getErrorMessage(requestError));
+    } finally {
+      setWalkInSubmitting(false);
+    }
   }
 
   if (loadingStaff && staff.length === 0) {
@@ -275,8 +349,8 @@ export function ScheduleBoard() {
   }
 
   return (
-    <div className="relative flex flex-1 flex-col px-4 pb-4 pt-6 md:px-6">
-      <header className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="relative flex flex-1 flex-col px-4 pb-4 pt-6 sm:px-6 lg:px-10 xl:px-12">
+      <header className="mb-4 flex flex-col gap-4 lg:mb-6 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <TenantBadge />
           <p className="mt-3 text-sm text-zinc-400">
@@ -294,11 +368,11 @@ export function ScheduleBoard() {
         </button>
       </header>
 
-      <AdminNav />
+      <AdminNav className="mb-4 lg:hidden" />
 
       {staffError ? (
         <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-          {staffError} Exibindo equipe demo local.
+          {staffError}
           <button
             type="button"
             onClick={() => void loadStaff()}
@@ -306,6 +380,25 @@ export function ScheduleBoard() {
           >
             Tentar novamente
           </button>
+        </div>
+      ) : null}
+
+      {appointmentsError ? (
+        <div className="mb-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          {appointmentsError}
+          <button
+            type="button"
+            onClick={() => void loadAppointments()}
+            className="ml-2 underline"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      ) : null}
+
+      {emptyChairNotice ? (
+        <div className="mb-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+          {emptyChairNotice}
         </div>
       ) : null}
 
@@ -345,31 +438,44 @@ export function ScheduleBoard() {
           Hoje
         </button>
 
-        <label className="rounded-2xl border border-zinc-800 bg-zinc-900/80 px-4 py-3">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 px-3 py-2.5 sm:min-w-[280px]">
           <span className="mb-1 block text-xs uppercase tracking-wide text-zinc-500">
             Profissional
           </span>
-          <select
+          <StaffSelect
             value={selectedStaffId}
-            onChange={(event) => setSelectedStaffId(event.target.value)}
-            className="w-full bg-transparent text-sm font-medium text-zinc-100 outline-none"
-          >
-            <option value="all">Visão geral da equipe</option>
-            {(staff.length > 0 ? staff : EXTRA_STAFF).map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name}
-              </option>
-            ))}
-          </select>
-        </label>
+            onChange={setSelectedStaffId}
+            staff={staff}
+            includeAll
+          />
+        </div>
       </section>
 
+      <WaitlistPanel
+        entries={waitlist}
+        loading={loadingWaitlist}
+        staff={staff}
+        services={services}
+        customers={customers}
+        submitting={waitlistSubmitting}
+        onJoin={handleJoinWaitlist}
+      />
+
       <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50">
-        <div className="overflow-x-auto">
+        {loadingAppointments ? (
+          <div className="p-8">
+            <LoadingState message="Carregando agendamentos do dia..." />
+          </div>
+        ) : visibleStaff.length === 0 ? (
+          <div className="p-8 text-center text-sm text-zinc-500">
+            Nenhum profissional cadastrado para exibir a grade.
+          </div>
+        ) : (
+        <div className="overflow-x-auto lg:overflow-visible">
           <div
-            className="grid min-w-[720px]"
+            className="grid w-full min-w-[640px] lg:min-w-0"
             style={{
-              gridTemplateColumns: `88px repeat(${visibleStaff.length}, minmax(180px, 1fr))`,
+              gridTemplateColumns: `72px repeat(${visibleStaff.length}, minmax(140px, 1fr))`,
             }}
           >
             <div className="sticky top-0 z-20 border-b border-r border-zinc-800 bg-zinc-950/95 px-3 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 backdrop-blur">
@@ -384,8 +490,13 @@ export function ScheduleBoard() {
                   <AccentIconWrap className="size-8 rounded-full">
                     <UserRound className="size-3.5" />
                   </AccentIconWrap>
-                  <span className="text-sm font-semibold text-zinc-100">
-                    {member.name}
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-zinc-100">
+                      {member.name}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[11px] text-zinc-500">
+                      {member.email || "Sem e-mail"}
+                    </span>
                   </span>
                 </div>
               </div>
@@ -429,16 +540,16 @@ export function ScheduleBoard() {
                             )
                           }
                           onComplete={() =>
-                            handleComplete(startingAppointment.id)
+                            void handleComplete(startingAppointment.id)
                           }
                           onCancel={() =>
-                            handleCancel(startingAppointment.id)
+                            void handleCancel(startingAppointment.id)
                           }
                           onStartReschedule={() =>
                             setRescheduleId(startingAppointment.id)
                           }
                           onReschedule={(time) =>
-                            handleReschedule(startingAppointment.id, time)
+                            void handleReschedule(startingAppointment.id, time)
                           }
                           onCloseReschedule={() => setRescheduleId(null)}
                         />
@@ -486,24 +597,25 @@ export function ScheduleBoard() {
             ))}
           </div>
         </div>
+        )}
       </section>
 
       <p className="mt-4 text-xs text-zinc-500">
-        Dados de agenda em modo operacional local. Integração com{" "}
-        <Link href="/admin" className="text-[var(--accent)] underline">
-          appointments
-        </Link>{" "}
-        da API em breve.
+        Agenda sincronizada com a API em tempo real. Alterações de status e
+        remarcações são persistidas no servidor.
       </p>
 
       {walkInOpen ? (
         <WalkInModal
           form={walkInForm}
-          staff={staff.length > 0 ? staff : EXTRA_STAFF}
+          staff={staff}
+          services={services}
+          customers={customers}
           timeSlots={timeSlots}
+          submitting={walkInSubmitting}
           onClose={() => setWalkInOpen(false)}
           onChange={setWalkInForm}
-          onSubmit={handleWalkInSubmit}
+          onSubmit={(event) => void handleWalkInSubmit(event)}
         />
       ) : null}
     </div>
@@ -639,13 +751,16 @@ function ActionButton({
 
 type WalkInModalProps = {
   form: {
-    customerName: string;
-    serviceName: string;
+    clientId: string;
+    serviceId: string;
     staffId: string;
     startTime: string;
   };
   staff: StaffMember[];
+  services: ServiceOption[];
+  customers: CustomerOption[];
   timeSlots: number[];
+  submitting: boolean;
   onClose: () => void;
   onChange: React.Dispatch<
     React.SetStateAction<WalkInModalProps["form"]>
@@ -656,7 +771,10 @@ type WalkInModalProps = {
 function WalkInModal({
   form,
   staff,
+  services,
+  customers,
   timeSlots,
+  submitting,
   onClose,
   onChange,
   onSubmit,
@@ -679,56 +797,63 @@ function WalkInModal({
 
         <form onSubmit={onSubmit} className="space-y-4">
           <Field label="Cliente">
-            <input
-              value={form.customerName}
+            <select
+              value={form.clientId}
               onChange={(event) =>
                 onChange((current) => ({
                   ...current,
-                  customerName: event.target.value,
+                  clientId: event.target.value,
                 }))
               }
-              placeholder="Nome do cliente"
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none"
-            />
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none [color-scheme:dark]"
+            >
+              {customers.length === 0 ? (
+                <option value="">Nenhum cliente cadastrado</option>
+              ) : (
+                customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </option>
+                ))
+              )}
+            </select>
           </Field>
 
           <Field label="Serviço">
             <select
-              value={form.serviceName}
+              value={form.serviceId}
               onChange={(event) =>
                 onChange((current) => ({
                   ...current,
-                  serviceName: event.target.value,
+                  serviceId: event.target.value,
                 }))
               }
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none"
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none [color-scheme:dark]"
             >
-              {SERVICE_OPTIONS.map((service) => (
-                <option key={service} value={service}>
-                  {service}
-                </option>
-              ))}
+              {services.length === 0 ? (
+                <option value="">Nenhum serviço cadastrado</option>
+              ) : (
+                services.map((service) => (
+                  <option key={service.id} value={service.id}>
+                    {service.name}
+                  </option>
+                ))
+              )}
             </select>
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Profissional">
-              <select
-                value={form.staffId}
-                onChange={(event) =>
-                  onChange((current) => ({
-                    ...current,
-                    staffId: event.target.value,
-                  }))
-                }
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none"
-              >
-                {staff.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name}
-                  </option>
-                ))}
-              </select>
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-1.5">
+                <StaffSelect
+                  value={form.staffId}
+                  onChange={(staffId) =>
+                    onChange((current) => ({ ...current, staffId }))
+                  }
+                  staff={staff}
+                  placeholder="Escolher barbeiro"
+                />
+              </div>
             </Field>
 
             <Field label="Horário">
@@ -740,7 +865,7 @@ function WalkInModal({
                     startTime: event.target.value,
                   }))
                 }
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none [color-scheme:dark]"
               >
                 {timeSlots.map((slot) => (
                   <option key={slot} value={minutesToLabel(slot)}>
@@ -753,9 +878,10 @@ function WalkInModal({
 
           <button
             type="submit"
-            className="w-full rounded-2xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-strong)] px-4 py-3 text-sm font-semibold text-zinc-950"
+            disabled={submitting || !form.clientId || !form.serviceId}
+            className="w-full rounded-2xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-strong)] px-4 py-3 text-sm font-semibold text-zinc-950 disabled:opacity-50"
           >
-            Confirmar encaixe
+            {submitting ? "Salvando..." : "Confirmar encaixe"}
           </button>
         </form>
       </div>

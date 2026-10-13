@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { createSerwistRoute } from "@serwist/turbopack";
 
 const offlineRevision = createHash("md5")
-  .update(readFileSync("app/~offline/page.tsx", "utf-8"))
+  .update(readFileSync("app/(client)/~offline/page.tsx", "utf-8"))
   .digest("hex");
 
 const appRevision =
@@ -19,6 +19,11 @@ export const { dynamic, dynamicParams, revalidate, generateStaticParams, GET } =
       { url: "/cliente", revision: appRevision },
       { url: "/admin", revision: appRevision },
       { url: "/admin/agenda", revision: appRevision },
+      { url: "/admin/financeiro", revision: appRevision },
+      { url: "/admin/marketing", revision: appRevision },
+      { url: "/admin/gestao", revision: appRevision },
+      { url: "/admin/estoque", revision: appRevision },
+      { url: "/admin/assinaturas", revision: appRevision },
       { url: "/~offline", revision: offlineRevision },
     ],
     swSrc: "app/sw.ts",

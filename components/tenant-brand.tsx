@@ -1,6 +1,6 @@
 "use client";
 
-import { AccentIconWrap } from "@/components/app-shell";
+import { AccentIconWrap } from "@/components/shell/accent-ui";
 import { useTenant } from "@/contexts/tenant-context";
 import { cn } from "@/lib/cn";
 import { Scissors } from "lucide-react";

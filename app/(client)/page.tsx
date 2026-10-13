@@ -1,4 +1,4 @@
-import { AccentIconWrap } from "@/components/app-shell";
+import { AccentIconWrap } from "@/components/shell/accent-ui";
 import { TenantBrand } from "@/components/tenant-brand";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -63,7 +63,7 @@ export default function Home() {
           href="/cliente"
           icon={UserRound}
           title="Área do Cliente"
-          description="Veja agendamentos, histórico e benefícios."
+          description="Perfil, plano do clube e seus agendamentos."
         />
       </section>
 
@@ -85,6 +85,12 @@ export default function Home() {
         <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-600">
           Powered by Clubby
         </p>
+        <Link
+          href="/parceiro"
+          className="mt-3 inline-block text-xs text-zinc-500 underline-offset-4 hover:text-zinc-300 hover:underline"
+        >
+          Quero cadastrar meu estabelecimento
+        </Link>
       </footer>
     </div>
   );

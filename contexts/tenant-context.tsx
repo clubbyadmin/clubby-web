@@ -18,11 +18,15 @@ import {
   type ReactNode,
 } from "react";
 
+const TEST_TENANT_SLUG_KEY = "clubby.testTenantSlug";
+
 type TenantContextValue = {
   tenant: TenantConfig;
   loading: boolean;
   error: string | null;
   reload: () => Promise<void>;
+  switchTenantSlug: (nextSlug: string) => void;
+  resetTenantSlug: () => void;
   updateTheme: (theme: Partial<TenantConfig["theme"]>) => void;
 };
 
@@ -33,20 +37,61 @@ type TenantProviderProps = {
   slug?: string;
 };
 
-export function TenantProvider({
-  children,
-  slug = DEFAULT_TENANT_SLUG,
-}: TenantProviderProps) {
+function readTestTenantSlug() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return sessionStorage.getItem(TEST_TENANT_SLUG_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function persistTestTenantSlug(nextSlug: string | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (nextSlug) {
+      sessionStorage.setItem(TEST_TENANT_SLUG_KEY, nextSlug);
+    } else {
+      sessionStorage.removeItem(TEST_TENANT_SLUG_KEY);
+    }
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+export function TenantProvider({ children, slug }: TenantProviderProps) {
+  const lockedSlug = slug;
+  const [activeSlug, setActiveSlug] = useState(
+    () => lockedSlug ?? DEFAULT_TENANT_SLUG,
+  );
   const [tenant, setTenant] = useState<TenantConfig>(FALLBACK_TENANT);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (lockedSlug) {
+      setActiveSlug(lockedSlug);
+      return;
+    }
+
+    const stored = readTestTenantSlug();
+    if (stored) {
+      setActiveSlug(stored);
+    }
+  }, [lockedSlug]);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await api.getTenant(slug);
+      const response = await api.getTenant(activeSlug);
       setTenant(response);
     } catch (requestError) {
       setError(getErrorMessage(requestError));
@@ -54,13 +99,15 @@ export function TenantProvider({
     } finally {
       setLoading(false);
     }
-  }, [slug]);
+  }, [activeSlug]);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
 
     api
-      .getTenant(slug)
+      .getTenant(activeSlug)
       .then((response) => {
         if (!cancelled) {
           setTenant(response);
@@ -78,7 +125,17 @@ export function TenantProvider({
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [activeSlug]);
+
+  const switchTenantSlug = useCallback((nextSlug: string) => {
+    persistTestTenantSlug(nextSlug);
+    setActiveSlug(nextSlug);
+  }, []);
+
+  const resetTenantSlug = useCallback(() => {
+    persistTestTenantSlug(null);
+    setActiveSlug(DEFAULT_TENANT_SLUG);
+  }, []);
 
   const updateTheme = useCallback((theme: Partial<TenantConfig["theme"]>) => {
     setTenant((current) => ({
@@ -96,9 +153,11 @@ export function TenantProvider({
       loading,
       error,
       reload,
+      switchTenantSlug,
+      resetTenantSlug,
       updateTheme,
     }),
-    [tenant, loading, error, reload, updateTheme],
+    [tenant, loading, error, reload, switchTenantSlug, resetTenantSlug, updateTheme],
   );
 
   return (
@@ -118,9 +177,10 @@ export function useTenant() {
 
 type TenantGateProps = {
   children: ReactNode;
+  strict?: boolean;
 };
 
-export function TenantGate({ children }: TenantGateProps) {
+export function TenantGate({ children, strict = false }: TenantGateProps) {
   const { loading, error, reload } = useTenant();
 
   if (loading) {
@@ -130,7 +190,12 @@ export function TenantGate({ children }: TenantGateProps) {
   if (error) {
     return (
       <ErrorState
-        message={`${error} Usando tema padrão do Studio Barbearia.`}
+        title={strict ? "Estabelecimento não encontrado" : undefined}
+        message={
+          strict
+            ? error
+            : `${error} Usando tema padrão do Studio Barbearia.`
+        }
         onRetry={() => void reload()}
       />
     );
