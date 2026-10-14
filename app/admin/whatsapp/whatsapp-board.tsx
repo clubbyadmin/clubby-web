@@ -186,7 +186,7 @@ export function WhatsappBoard() {
 
   return (
     <div className="flex flex-1 flex-col px-4 pb-8 pt-6 lg:px-8">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <header>
         <div>
           <TenantBadge />
           <h1 className="mt-3 text-2xl font-semibold tracking-tight text-zinc-50">
@@ -197,8 +197,9 @@ export function WhatsappBoard() {
             da operação.
           </p>
         </div>
-        <AdminNav />
       </header>
+
+      <AdminNav className="mt-4 lg:hidden" />
 
       {loading || tenantLoading ? (
         <LoadingState message="Carregando WhatsApp..." />

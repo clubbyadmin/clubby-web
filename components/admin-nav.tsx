@@ -39,7 +39,12 @@ function AdminNavInner({
 
   if (!isVertical) {
     return (
-      <nav className={cn("flex gap-1 overflow-x-auto pb-1", className)}>
+      <nav
+        className={cn(
+          "flex min-w-0 items-center gap-1 overflow-x-auto pb-3 [scrollbar-width:thin]",
+          className,
+        )}
+      >
         {links.map((item) => (
           <NavLink key={item.href} item={item} pathname={pathname} search={search} />
         ))}
