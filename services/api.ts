@@ -350,6 +350,17 @@ export type ApiAppointmentStatus =
   | "CANCELLED"
   | "NO_SHOW";
 
+export type ApiOpeningHours = {
+  days: Array<{
+    dayOfWeek: number;
+    openTime: string;
+    closeTime: string;
+    lunchStart: string | null;
+    lunchEnd: string | null;
+  }>;
+  breaks: Array<{ staffId: string; start: string; end: string }>;
+};
+
 export type ApiAppointment = {
   id: string;
   tenantId: string;
@@ -367,6 +378,7 @@ export type ApiAppointment = {
     name: string;
     phone: string;
     role: ApiUserRole;
+    commissionRate?: string | number | null;
   };
   services: Array<{
     service: {
@@ -376,6 +388,13 @@ export type ApiAppointment = {
       price: string | number;
     };
   }>;
+  totalAmount?: string | number;
+  clientInsight?: {
+    lastService: string | null;
+    usualProfessional: string | null;
+    planRemaining: number | null;
+    missedLast: boolean;
+  } | null;
 };
 
 export type CreateAppointmentPayload = {
@@ -451,7 +470,8 @@ export type ApiEmptyChairFill = {
     | "NO_MATCH"
     | "ALREADY_FILLED"
     | "ALREADY_CANCELLED"
-    | "BOOKING_FAILED";
+    | "BOOKING_FAILED"
+    | "OFFERED";
   waitlistEntry?: ApiWaitlistEntry;
   appointment?: { id: string };
 };
@@ -1481,6 +1501,40 @@ export const api = {
     });
   },
 
+  getAvailability(params: {
+    tenantId: string;
+    professionalId: string;
+    serviceId: string;
+    date: string;
+  }) {
+    return request<{ slots: string[] }>(
+      `/appointments/availability${buildQuery(params)}`,
+    );
+  },
+
+  getOpeningHours(tenantId: string) {
+    return request<ApiOpeningHours>(
+      `/appointments/hours${buildQuery({ tenantId })}`,
+    );
+  },
+
+  saveOpeningHours(payload: ApiOpeningHours & { tenantId: string }) {
+    return request<ApiOpeningHours>("/appointments/hours", {
+      method: "PUT",
+      body: payload,
+    });
+  },
+
+  moveAppointment(
+    id: string,
+    payload: { newProfessionalId: string; newStartTime: string },
+  ) {
+    return request<ApiAppointment>(`/appointments/${id}/move`, {
+      method: "PATCH",
+      body: payload,
+    });
+  },
+
   updateAppointment(id: string, payload: UpdateAppointmentPayload) {
     return request<ApiAppointment>(`/appointments/${id}`, {
       method: "PATCH",
@@ -2096,6 +2150,7 @@ export function mapApiAppointmentToSchedule(
     startMinutes: start.getHours() * 60 + start.getMinutes(),
     durationMinutes,
     status: mapApiStatusToSchedule(appointment.status),
+    insight: appointment.clientInsight ?? null,
   };
 }
 
@@ -2107,8 +2162,9 @@ export function mapApiStatusToSchedule(
     case "PENDING_PAYMENT":
       return "PENDING";
     case "CONFIRMED":
-    case "IN_PROGRESS":
       return "CONFIRMED";
+    case "IN_PROGRESS":
+      return "IN_PROGRESS";
     case "COMPLETED":
       return "COMPLETED";
     case "CANCELLED":

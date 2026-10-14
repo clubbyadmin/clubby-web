@@ -11,6 +11,7 @@ import {
   formatDateKey,
   formatDisplayDate,
   generateTimeSlots,
+  labelToMinutes,
   minutesToLabel,
   slotSpan,
   statusLabels,
@@ -23,6 +24,7 @@ import {
   dayRangeIso,
   getErrorMessage,
   mapApiAppointmentToSchedule,
+  type ApiOpeningHours,
   type ApiWaitlistEntry,
 } from "@/services/api";
 import { WaitlistPanel } from "./waitlist-panel";
@@ -35,7 +37,7 @@ import {
   RefreshCw,
   X,
 } from "lucide-react";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type StaffMember = {
   id: string;
@@ -71,6 +73,8 @@ export function ScheduleBoard() {
   const [loadingWaitlist, setLoadingWaitlist] = useState(false);
   const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
   const [emptyChairNotice, setEmptyChairNotice] = useState<string | null>(null);
+  const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null);
+  const [openingHours, setOpeningHours] = useState<ApiOpeningHours | null>(null);
   const [staffError, setStaffError] = useState<string | null>(null);
   const [appointmentsError, setAppointmentsError] = useState<string | null>(
     null,
@@ -79,6 +83,8 @@ export function ScheduleBoard() {
   const [walkInSubmitting, setWalkInSubmitting] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const skipWalkInClick = useRef(false);
   const [walkInForm, setWalkInForm] = useState({
     clientId: "",
     serviceId: "",
@@ -86,7 +92,25 @@ export function ScheduleBoard() {
     startTime: "09:00",
   });
 
-  const timeSlots = useMemo(() => generateTimeSlots(), []);
+  const timeSlots = useMemo(() => {
+    const day = openingHours?.days.find(
+      (item) => item.dayOfWeek === selectedDate.getDay(),
+    );
+
+    if (openingHours && openingHours.days.length > 0 && !day) {
+      return [];
+    }
+
+    const start = day ? labelToMinutes(day.openTime) : 8 * 60;
+    const end = day ? labelToMinutes(day.closeTime) : 20 * 60;
+    const slots: number[] = [];
+
+    for (let minutes = start; minutes < end; minutes += 30) {
+      slots.push(minutes);
+    }
+
+    return slots;
+  }, [openingHours, selectedDate]);
 
   const loadStaff = useCallback(async () => {
     setLoadingStaff(true);
@@ -118,6 +142,10 @@ export function ScheduleBoard() {
       setStaff(mappedStaff);
       setServices(mappedServices);
       setCustomers(mappedCustomers);
+      if (tenantId) {
+        const hours = await api.getOpeningHours(tenantId).catch(() => null);
+        setOpeningHours(hours);
+      }
       setWalkInForm((current) => ({
         ...current,
         staffId: current.staffId || mappedStaff[0]?.id || "",
@@ -221,12 +249,47 @@ export function ScheduleBoard() {
     });
   }
 
-  async function handleComplete(appointmentId: string) {
+  async function handleStatus(
+    appointmentId: string,
+    status: "IN_PROGRESS" | "COMPLETED",
+  ) {
     setActiveMenuId(null);
 
     try {
-      await api.updateAppointment(appointmentId, { status: "COMPLETED" });
+      const updated = await api.updateAppointment(appointmentId, { status });
+      if (status === "COMPLETED") {
+        const amount = Number(updated.totalAmount ?? 0);
+        const rate = Number(updated.staff.commissionRate ?? 0);
+        const commission = Math.round(amount * rate * 100) / 100;
+        setCheckoutNotice(
+          `Saiu da cadeira. Caixa: R$ ${amount.toFixed(2).replace(".", ",")} · comissão R$ ${commission.toFixed(2).replace(".", ",")}.`,
+        );
+      }
       await loadAppointments();
+    } catch (requestError) {
+      setAppointmentsError(getErrorMessage(requestError));
+    }
+  }
+
+  async function handleMove(
+    appointmentId: string,
+    staffId: string,
+    slotMinutes: number,
+  ) {
+    const start = new Date(selectedDate);
+    start.setHours(Math.floor(slotMinutes / 60), slotMinutes % 60, 0, 0);
+
+    if (start.getTime() <= Date.now()) {
+      setAppointmentsError("Esse horário já passou.");
+      return;
+    }
+
+    try {
+      await api.moveAppointment(appointmentId, {
+        newProfessionalId: staffId,
+        newStartTime: start.toISOString(),
+      });
+      await Promise.all([loadAppointments(), loadWaitlist()]);
     } catch (requestError) {
       setAppointmentsError(getErrorMessage(requestError));
     }
@@ -240,7 +303,12 @@ export function ScheduleBoard() {
       const result = await api.cancelAppointment(appointmentId);
       await Promise.all([loadAppointments(), loadWaitlist()]);
 
-      if (result.emptyChair.filled && result.emptyChair.waitlistEntry) {
+      if (result.emptyChair.reason === "OFFERED" && result.emptyChair.waitlistEntry) {
+        const entry = result.emptyChair.waitlistEntry;
+        setEmptyChairNotice(
+          `Ofereci ${entry.targetTimeSlot} para ${entry.client.name}. Se disser sim, o horário entra na grade.`,
+        );
+      } else if (result.emptyChair.filled && result.emptyChair.waitlistEntry) {
         const entry = result.emptyChair.waitlistEntry;
         setEmptyChairNotice(
           `Cadeira preenchida: ${entry.client.name} entrou às ${entry.targetTimeSlot} (${entry.service.name}).`,
@@ -398,6 +466,19 @@ export function ScheduleBoard() {
           {emptyChairNotice}
         </div>
       ) : null}
+      {checkoutNotice ? (
+        <div className="mb-4 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+          {checkoutNotice}
+        </div>
+      ) : null}
+      {tenantId ? (
+        <HoursEditor
+          tenantId={tenantId}
+          staff={staff}
+          hours={openingHours}
+          onSaved={setOpeningHours}
+        />
+      ) : null}
 
       <section className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="flex min-w-0 flex-1 items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-1.5">
@@ -485,8 +566,19 @@ export function ScheduleBoard() {
 
             {timeSlots.map((slotMinutes) => (
               <Fragment key={`row-${slotMinutes}`}>
-                <div className="border-b border-r border-zinc-800 px-3 py-4 text-xs font-medium text-zinc-500">
+                <div
+                  className={cn(
+                    "border-b border-r border-zinc-800 px-3 py-4 text-xs font-medium text-zinc-500",
+                    isCurrentSlot(selectedDate, slotMinutes) &&
+                      "bg-amber-400/10 text-amber-300",
+                  )}
+                >
                   {minutesToLabel(slotMinutes)}
+                  {isCurrentSlot(selectedDate, slotMinutes) ? (
+                    <span className="mt-1 block text-[10px] uppercase tracking-wide">
+                      Agora
+                    </span>
+                  ) : null}
                 </div>
 
                 {visibleStaff.map((member) => {
@@ -521,7 +613,10 @@ export function ScheduleBoard() {
                             )
                           }
                           onComplete={() =>
-                            void handleComplete(startingAppointment.id)
+                            void handleStatus(startingAppointment.id, "COMPLETED")
+                          }
+                          onSeat={() =>
+                            void handleStatus(startingAppointment.id, "IN_PROGRESS")
                           }
                           onCancel={() =>
                             void handleCancel(startingAppointment.id)
@@ -533,6 +628,9 @@ export function ScheduleBoard() {
                             void handleReschedule(startingAppointment.id, time)
                           }
                           onCloseReschedule={() => setRescheduleId(null)}
+                          draggable
+                          onDragStart={() => setDraggingId(startingAppointment.id)}
+                          onDragEnd={() => setDraggingId(null)}
                         />
                       </div>
                     );
@@ -554,11 +652,41 @@ export function ScheduleBoard() {
                     );
                   }
 
+                  if (isBreakSlot(openingHours, selectedDate, member.id, slotMinutes)) {
+                    return (
+                      <div
+                        key={cellKey}
+                        className="min-h-16 border-b border-r border-zinc-800 bg-zinc-950/70 p-2 text-[11px] text-zinc-500 last:border-r-0"
+                      >
+                        Pausa
+                      </div>
+                    );
+                  }
+
                   return (
                     <button
                       key={cellKey}
                       type="button"
+                      onDragOver={(event) => {
+                        if (draggingId) {
+                          event.preventDefault();
+                        }
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        skipWalkInClick.current = true;
+                        const appointmentId =
+                          event.dataTransfer.getData("text/plain") || draggingId;
+                        if (appointmentId) {
+                          void handleMove(appointmentId, member.id, slotMinutes);
+                        }
+                        setDraggingId(null);
+                      }}
                       onClick={() => {
+                        if (skipWalkInClick.current) {
+                          skipWalkInClick.current = false;
+                          return;
+                        }
                         setWalkInForm((current) => ({
                           ...current,
                           staffId: member.id,
@@ -566,7 +694,10 @@ export function ScheduleBoard() {
                         }));
                         setWalkInOpen(true);
                       }}
-                      className="group min-h-16 border-b border-r border-zinc-800 p-2 text-left transition last:border-r-0 hover:bg-zinc-900/80"
+                      className={cn(
+                        "group min-h-16 border-b border-r border-zinc-800 p-2 text-left transition last:border-r-0 hover:bg-zinc-900/80",
+                        draggingId && "bg-amber-400/5",
+                      )}
                     >
                       <span className="text-[11px] font-medium text-transparent group-hover:text-zinc-400">
                         Encaixar
@@ -605,10 +736,14 @@ type AppointmentCardProps = {
   isRescheduling: boolean;
   onToggleMenu: () => void;
   onComplete: () => void;
+  onSeat: () => void;
   onCancel: () => void;
   onStartReschedule: () => void;
   onReschedule: (time: string) => void;
   onCloseReschedule: () => void;
+  draggable?: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
 };
 
 function AppointmentCard({
@@ -618,13 +753,24 @@ function AppointmentCard({
   isRescheduling,
   onToggleMenu,
   onComplete,
+  onSeat,
   onCancel,
   onStartReschedule,
   onReschedule,
   onCloseReschedule,
+  draggable,
+  onDragStart,
+  onDragEnd,
 }: AppointmentCardProps) {
   return (
     <div
+      draggable={draggable}
+      onDragStart={(event) => {
+        event.dataTransfer.setData("text/plain", appointment.id);
+        event.dataTransfer.effectAllowed = "move";
+        onDragStart?.();
+      }}
+      onDragEnd={onDragEnd}
       className={cn(
         "relative flex h-full min-h-[calc(var(--slot-span)*4rem)] flex-col rounded-xl border p-3 ring-1",
         statusStyles[appointment.status],
@@ -637,6 +783,24 @@ function AppointmentCard({
             {appointment.customerName}
           </p>
           <p className="mt-1 text-xs opacity-90">{appointment.serviceName}</p>
+          {appointment.insight ? (
+            <p className="mt-1 text-[11px] leading-snug opacity-80">
+              {[
+                appointment.insight.lastService
+                  ? `Último: ${appointment.insight.lastService}`
+                  : null,
+                appointment.insight.usualProfessional
+                  ? `De sempre: ${appointment.insight.usualProfessional}`
+                  : null,
+                appointment.insight.planRemaining !== null
+                  ? `Cota: ${appointment.insight.planRemaining}`
+                  : null,
+                appointment.insight.missedLast ? "Faltou da última vez" : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          ) : null}
         </div>
         <button
           type="button"
@@ -660,7 +824,8 @@ function AppointmentCard({
 
       {isMenuOpen ? (
         <div className="absolute right-2 top-10 z-30 min-w-44 rounded-xl border border-zinc-700 bg-zinc-950 p-1 shadow-xl">
-          <ActionButton label="Concluir atendimento" onClick={onComplete} />
+          <ActionButton label="Na cadeira" onClick={onSeat} />
+          <ActionButton label="Saiu" onClick={onComplete} />
           <ActionButton label="Remarcar" onClick={onStartReschedule} />
           <ActionButton
             label="Cancelar"
@@ -697,6 +862,218 @@ function AppointmentCard({
       ) : null}
     </div>
   );
+}
+
+function isBreakSlot(
+  hours: ApiOpeningHours | null,
+  date: Date,
+  staffId: string,
+  slotMinutes: number,
+) {
+  const day = hours?.days.find((item) => item.dayOfWeek === date.getDay());
+  const windows = [
+    day?.lunchStart && day.lunchEnd
+      ? { start: labelToMinutes(day.lunchStart), end: labelToMinutes(day.lunchEnd) }
+      : null,
+    hours?.breaks
+      .filter((item) => item.staffId === staffId)
+      .map((item) => ({
+        start: labelToMinutes(item.start),
+        end: labelToMinutes(item.end),
+      })) ?? [],
+  ].flat();
+
+  return windows.some(
+    (item) => item && slotMinutes < item.end && slotMinutes + 30 > item.start,
+  );
+}
+
+const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+function HoursEditor({
+  tenantId,
+  staff,
+  hours,
+  onSaved,
+}: {
+  tenantId: string;
+  staff: StaffMember[];
+  hours: ApiOpeningHours | null;
+  onSaved: (hours: ApiOpeningHours) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [days, setDays] = useState(() =>
+    DAY_NAMES.map((_, dayOfWeek) => {
+      const current = hours?.days.find((item) => item.dayOfWeek === dayOfWeek);
+      return {
+        dayOfWeek,
+        closed: hours ? !current : dayOfWeek === 0,
+        openTime: current?.openTime ?? "09:00",
+        closeTime: current?.closeTime ?? (dayOfWeek === 6 ? "14:00" : "19:00"),
+        lunchStart: current?.lunchStart ?? (dayOfWeek === 0 || dayOfWeek === 6 ? "" : "12:00"),
+        lunchEnd: current?.lunchEnd ?? (dayOfWeek === 0 || dayOfWeek === 6 ? "" : "13:00"),
+      };
+    }),
+  );
+  const [breaks, setBreaks] = useState(() =>
+    staff.map((person) => {
+      const current = hours?.breaks.find((item) => item.staffId === person.id);
+      return { staffId: person.id, start: current?.start ?? "", end: current?.end ?? "" };
+    }),
+  );
+
+  useEffect(() => {
+    setBreaks(
+      staff.map((person) => {
+        const current = hours?.breaks.find((item) => item.staffId === person.id);
+        return { staffId: person.id, start: current?.start ?? "", end: current?.end ?? "" };
+      }),
+    );
+  }, [hours, staff]);
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+
+    try {
+      const saved = await api.saveOpeningHours({
+        tenantId,
+        days: days.map((day) => ({
+          dayOfWeek: day.dayOfWeek,
+          openTime: day.openTime,
+          closeTime: day.closeTime,
+          lunchStart: day.lunchStart || null,
+          lunchEnd: day.lunchEnd || null,
+          closed: day.closed,
+        })),
+        breaks: breaks.filter((item) => item.start && item.end),
+      });
+      onSaved(saved);
+      setOpen(false);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="mb-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="text-sm font-semibold text-zinc-100"
+      >
+        Horário da casa e pausas
+      </button>
+      {open ? (
+        <div className="mt-4 space-y-4">
+          {days.map((day) => (
+            <div key={day.dayOfWeek} className="grid gap-2 sm:grid-cols-[4rem_5rem_1fr_1fr_1fr_1fr] sm:items-center">
+              <span className="text-xs text-zinc-400">{DAY_NAMES[day.dayOfWeek]}</span>
+              <label className="flex items-center gap-2 text-xs text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={!day.closed}
+                  onChange={(event) =>
+                    setDays((current) =>
+                      current.map((item) =>
+                        item.dayOfWeek === day.dayOfWeek
+                          ? { ...item, closed: !event.target.checked }
+                          : item,
+                      ),
+                    )
+                  }
+                />
+                Aberto
+              </label>
+              {(["openTime", "closeTime", "lunchStart", "lunchEnd"] as const).map((field) => (
+                <input
+                  key={field}
+                  value={day[field]}
+                  disabled={day.closed}
+                  placeholder={field.startsWith("lunch") ? "almoço" : "hora"}
+                  onChange={(event) =>
+                    setDays((current) =>
+                      current.map((item) =>
+                        item.dayOfWeek === day.dayOfWeek
+                          ? { ...item, [field]: event.target.value }
+                          : item,
+                      ),
+                    )
+                  }
+                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 disabled:opacity-40"
+                />
+              ))}
+            </div>
+          ))}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Pausa de cada profissional
+            </p>
+            {staff.map((person) => {
+              const item = breaks.find((entry) => entry.staffId === person.id);
+              return (
+                <div key={person.id} className="grid gap-2 sm:grid-cols-[1fr_6rem_6rem] sm:items-center">
+                  <span className="text-sm text-zinc-200">{person.name}</span>
+                  <input
+                    value={item?.start ?? ""}
+                    placeholder="12:30"
+                    onChange={(event) =>
+                      setBreaks((current) =>
+                        current.map((entry) =>
+                          entry.staffId === person.id
+                            ? { ...entry, start: event.target.value }
+                            : entry,
+                        ),
+                      )
+                    }
+                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100"
+                  />
+                  <input
+                    value={item?.end ?? ""}
+                    placeholder="13:30"
+                    onChange={(event) =>
+                      setBreaks((current) =>
+                        current.map((entry) =>
+                          entry.staffId === person.id
+                            ? { ...entry, end: event.target.value }
+                            : entry,
+                        ),
+                      )
+                    }
+                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100"
+                  />
+                </div>
+              );
+            })}
+          </div>
+          {error ? <p className="text-sm text-red-300">{error}</p> : null}
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => void save()}
+            className="rounded-xl bg-amber-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-50"
+          >
+            {saving ? "Salvando..." : "Salvar horários"}
+          </button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function isCurrentSlot(date: Date, slotMinutes: number) {
+  const now = new Date();
+
+  if (date.toDateString() !== now.toDateString()) {
+    return false;
+  }
+
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  return nowMinutes >= slotMinutes && nowMinutes < slotMinutes + 30;
 }
 
 function ActionButton({

@@ -3,12 +3,13 @@
 import { ErrorState, LoadingState } from "@/components/api-state";
 import { PageHeader } from "@/components/page-header";
 import { useTenant } from "@/contexts/tenant-context";
+import { readStoredAdminUser } from "@/lib/admin-session-storage";
+import { formatDateKey } from "@/lib/schedule-data";
 import { tenantHref } from "@/lib/tenant-paths";
 import {
   formatCurrency,
   formatShortDate,
   getAvailableDates,
-  timeSlots,
   type Professional,
   type Service,
 } from "@/lib/mock-data";
@@ -101,6 +102,8 @@ export function BookingFlow({ embedded = false }: BookingFlowProps) {
     useState<Professional | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(availableDates[0]);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [openSlots, setOpenSlots] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [confirmedSummary, setConfirmedSummary] = useState<string | null>(null);
 
@@ -137,6 +140,49 @@ export function BookingFlow({ embedded = false }: BookingFlowProps) {
   useEffect(() => {
     void loadBookingData();
   }, [loadBookingData]);
+
+  useEffect(() => {
+    if (!tenantId || !selectedService || !selectedProfessional) {
+      setOpenSlots([]);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingSlots(true);
+
+    api
+      .getAvailability({
+        tenantId,
+        professionalId: selectedProfessional.id,
+        serviceId: selectedService.id,
+        date: formatDateKey(selectedDate),
+      })
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+
+        setOpenSlots(result.slots);
+        setSelectedTime((current) =>
+          current && result.slots.includes(current) ? current : null,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOpenSlots([]);
+          setSelectedTime(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingSlots(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDate, selectedProfessional, selectedService, tenantId]);
 
   async function handleConfirm() {
     if (!selectedService || !selectedProfessional || !selectedTime) {
@@ -418,22 +464,28 @@ export function BookingFlow({ embedded = false }: BookingFlowProps) {
               Horários disponíveis
             </h2>
             <div className="mt-3 grid grid-cols-3 gap-2">
-              {timeSlots.map((slot) => {
-                const isSelected = selectedTime === slot.label;
+              {loadingSlots ? (
+                <p className="text-sm text-zinc-500">Olhando os horários livres...</p>
+              ) : openSlots.length === 0 ? (
+                <p className="text-sm text-zinc-500">
+                  Não há horário livre nesse dia para esse profissional.
+                </p>
+              ) : null}
+              {openSlots.map((slot) => {
+                const isSelected = selectedTime === slot;
 
                 return (
                   <button
-                    key={slot.id}
+                    key={slot}
                     type="button"
-                    disabled={!slot.available}
-                    onClick={() => setSelectedTime(slot.label)}
-                    className={`rounded-xl border px-3 py-3 text-sm font-medium transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 ${
+                    onClick={() => setSelectedTime(slot)}
+                    className={`rounded-xl border px-3 py-3 text-sm font-medium transition active:scale-[0.98] ${
                       isSelected
                         ? "border-amber-400/60 bg-amber-400/10 text-amber-300"
                         : "border-zinc-800 bg-zinc-900/80 text-zinc-200 hover:border-zinc-700"
                     }`}
                   >
-                    {slot.label}
+                    {slot}
                   </button>
                 );
               })}
@@ -530,17 +582,16 @@ export function BookingFlow({ embedded = false }: BookingFlowProps) {
 async function fetchBookingCatalog(
   tenantId?: string,
 ): Promise<BookingCatalog> {
-  const [servicesResponse, professionalsResponse, customersResponse] =
-    await Promise.all([
-      api.getServices(tenantId),
-      api.getUsers({ role: "PROFESSIONAL", tenantId }),
-      api.getUsers({ role: "CUSTOMER", tenantId }),
-    ]);
+  const [servicesResponse, professionalsResponse] = await Promise.all([
+    api.getServices(tenantId),
+    api.getUsers({ role: "PROFESSIONAL", tenantId }),
+  ]);
+  const session = readStoredAdminUser();
 
   return {
     services: servicesResponse.map(mapApiService),
     professionals: professionalsResponse.map(mapApiProfessional),
-    clientId: customersResponse[0]?.id ?? null,
+    clientId: session?.role === "CUSTOMER" ? session.id : null,
     fromApi: true,
   };
 }

@@ -1,4 +1,9 @@
-export type ScheduleStatus = "CONFIRMED" | "PENDING" | "COMPLETED" | "CANCELLED";
+export type ScheduleStatus =
+  | "CONFIRMED"
+  | "PENDING"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "CANCELLED";
 
 export type ScheduleAppointment = {
   id: string;
@@ -10,6 +15,12 @@ export type ScheduleAppointment = {
   startMinutes: number;
   durationMinutes: number;
   status: ScheduleStatus;
+  insight?: {
+    lastService: string | null;
+    usualProfessional: string | null;
+    planRemaining: number | null;
+    missedLast: boolean;
+  } | null;
 };
 
 export const SCHEDULE_START_HOUR = 8;
@@ -17,15 +28,18 @@ export const SCHEDULE_END_HOUR = 20;
 export const SCHEDULE_INTERVAL_MINUTES = 30;
 
 export const statusLabels: Record<ScheduleStatus, string> = {
-  CONFIRMED: "Confirmado",
+  CONFIRMED: "Marcado",
   PENDING: "Pendente",
-  COMPLETED: "Concluído",
+  IN_PROGRESS: "Na cadeira",
+  COMPLETED: "Saiu",
   CANCELLED: "Cancelado",
 };
 
 export const statusStyles: Record<ScheduleStatus, string> = {
   CONFIRMED:
     "border-emerald-500/30 bg-emerald-500/10 text-emerald-300 ring-emerald-500/20",
+  IN_PROGRESS:
+    "border-amber-400/40 bg-amber-400/15 text-amber-200 ring-amber-400/30",
   PENDING:
     "border-[color-mix(in_srgb,var(--accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)] ring-[color-mix(in_srgb,var(--accent)_20%,transparent)]",
   COMPLETED: "border-zinc-600/40 bg-zinc-800/80 text-zinc-300 ring-zinc-600/30",
