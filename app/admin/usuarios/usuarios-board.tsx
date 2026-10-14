@@ -34,6 +34,8 @@ type UserFormState = {
   phone: string;
   password: string;
   role: ApiStaffRole;
+  commissionPercent: string;
+  asaasWalletId: string;
 };
 
 const INITIAL_FORM: UserFormState = {
@@ -42,6 +44,8 @@ const INITIAL_FORM: UserFormState = {
   phone: "",
   password: "",
   role: "PROFESSIONAL",
+  commissionPercent: "50",
+  asaasWalletId: "",
 };
 
 const STAFF_ROLES: Array<{
@@ -161,6 +165,10 @@ export function UsuariosBoard() {
       phone: user.phone,
       password: "",
       role: toStaffRole(user.role),
+      commissionPercent: String(
+        Math.round(Number(user.commissionRate ?? 0) * 100),
+      ),
+      asaasWalletId: user.asaasWalletId ?? "",
     });
     setModalOpen(true);
   }
@@ -177,6 +185,8 @@ export function UsuariosBoard() {
     const email = form.email.trim().toLowerCase();
     const phone = form.phone.replace(/\D/g, "");
     const password = form.password.trim();
+    const commissionRate = Number(form.commissionPercent.replace(",", ".")) / 100;
+    const asaasWalletId = form.asaasWalletId.trim();
 
     if (!name || !email || !phone) {
       setFormError("Preencha nome, e-mail de acesso, telefone e cargo.");
@@ -193,6 +203,11 @@ export function UsuariosBoard() {
       return;
     }
 
+    if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 1) {
+      setFormError("A comissão precisa ficar entre 0% e 100%.");
+      return;
+    }
+
     setSubmitting(true);
     setFormError(null);
 
@@ -203,6 +218,8 @@ export function UsuariosBoard() {
           email,
           phone,
           role: form.role,
+          commissionRate,
+          asaasWalletId: asaasWalletId || null,
           ...(password ? { password } : {}),
         });
       } else {
@@ -213,6 +230,8 @@ export function UsuariosBoard() {
           phone,
           password,
           role: form.role,
+          commissionRate,
+          asaasWalletId: asaasWalletId || null,
         });
       }
       setModalOpen(false);
@@ -251,8 +270,8 @@ export function UsuariosBoard() {
             Usuários e permissões · {tenant.name}
           </p>
           <p className="mt-1 max-w-xl text-sm text-zinc-500">
-            O e-mail é a chave de acesso: identifica o colaborador e o
-            estabelecimento. O nome serve só para exibição.
+            O e-mail libera o acesso. A carteira Asaas do profissional é a
+            conta que recebe a parte dele no split.
           </p>
         </div>
 
@@ -369,6 +388,7 @@ export function UsuariosBoard() {
                         <th className="px-3 py-2 font-medium">E-mail de acesso</th>
                         <th className="px-3 py-2 font-medium">Cargo</th>
                         <th className="px-3 py-2 font-medium">Acesso</th>
+                        <th className="px-3 py-2 font-medium">Repasse</th>
                         <th className="px-3 py-2 font-medium">Ações</th>
                       </tr>
                     </thead>
@@ -402,6 +422,11 @@ export function UsuariosBoard() {
                               status={user.accessStatus}
                               email={user.email}
                             />
+                          </td>
+                          <td className="px-3 py-3 text-xs text-zinc-400">
+                            {user.role === "PROFESSIONAL"
+                              ? user.asaasWalletId || "Sem carteira"
+                              : "—"}
                           </td>
                           <td className="px-3 py-3">
                             <div className="flex flex-col gap-2">
@@ -481,6 +506,7 @@ export function UsuariosBoard() {
       {modalOpen ? (
         <UserModal
           mode={editingUser ? "edit" : "create"}
+          accountId={editingUser?.id ?? null}
           form={form}
           submitting={submitting}
           error={formError}
@@ -596,6 +622,7 @@ function RoleSelect({
 
 function UserModal({
   mode,
+  accountId,
   form,
   submitting,
   error,
@@ -604,6 +631,7 @@ function UserModal({
   onSubmit,
 }: {
   mode: "create" | "edit";
+  accountId: string | null;
   form: UserFormState;
   submitting: boolean;
   error: string | null;
@@ -622,8 +650,8 @@ function UserModal({
               {isEdit ? "Editar colaborador" : "Cadastrar novo usuário"}
             </h2>
             <p className="mt-1 text-sm text-zinc-500">
-              O e-mail é a chave de acesso: ele identifica o colaborador e o
-              estabelecimento.
+              O e-mail entra no login. A senha fica só como hash e não volta
+              para esta tela.
             </p>
           </div>
           <button
@@ -701,6 +729,49 @@ function UserModal({
               className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600"
             />
           </Field>
+
+          {accountId ? (
+            <Field label="Identificador da conta">
+              <input
+                readOnly
+                value={accountId}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 font-mono text-xs text-zinc-400 outline-none"
+              />
+            </Field>
+          ) : null}
+
+          {form.role === "PROFESSIONAL" ? (
+            <>
+              <Field label="Comissão do profissional (%)">
+                <input
+                  required
+                  inputMode="decimal"
+                  value={form.commissionPercent}
+                  onChange={(event) =>
+                    onChange((current) => ({
+                      ...current,
+                      commissionPercent: event.target.value,
+                    }))
+                  }
+                  placeholder="50"
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600"
+                />
+              </Field>
+              <Field label="Carteira Asaas do repasse">
+                <input
+                  value={form.asaasWalletId}
+                  onChange={(event) =>
+                    onChange((current) => ({
+                      ...current,
+                      asaasWalletId: event.target.value,
+                    }))
+                  }
+                  placeholder="Identificador da carteira, sem espaços"
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600"
+                />
+              </Field>
+            </>
+          ) : null}
 
           <fieldset>
             <legend className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">

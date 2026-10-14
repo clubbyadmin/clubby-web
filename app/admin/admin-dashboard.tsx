@@ -21,6 +21,7 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useState } from "react";
 
 type AdminTab = "overview" | "team" | "services";
@@ -216,6 +217,13 @@ export function AdminDashboard() {
 
       {activeTab === "services" ? (
         <section className="space-y-3">
+          <p className="text-sm text-zinc-500">
+            Para incluir, editar ou desativar, use{" "}
+            <Link href="/admin/servicos" className="text-zinc-200 underline">
+              Serviços
+            </Link>
+            .
+          </p>
           {loadingData ? (
             <LoadingState message="Carregando serviços..." />
           ) : dataError ? (

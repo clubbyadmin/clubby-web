@@ -10,6 +10,7 @@ import {
   Megaphone,
   MessageCircle,
   Package,
+  Scissors,
   ShieldCheck,
   Target,
   UserCog,
@@ -158,6 +159,14 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     group: "Receita",
     roles: MANAGER_ROLES,
     match: (pathname) => pathname.startsWith("/admin/estoque"),
+  },
+  {
+    href: "/admin/servicos",
+    label: "Serviços",
+    icon: Scissors,
+    group: "Receita",
+    roles: MANAGER_ROLES,
+    match: (pathname) => pathname.startsWith("/admin/servicos"),
   },
   {
     href: "/admin/assinaturas",

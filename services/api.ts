@@ -41,6 +41,7 @@ export type ApiUser = {
   phone: string;
   role: ApiUserRole;
   commissionRate: string | number;
+  asaasWalletId?: string | null;
   birthDate?: string | null;
   accessStatus?: ApiAccessStatus;
   createdAt: string;
@@ -1252,9 +1253,53 @@ export const api = {
     });
   },
 
-  getServices(tenantId?: string) {
+  getServices(tenantId?: string, options?: { includeInactive?: boolean }) {
     return request<ApiService[]>(
-      `/services${buildQuery({ tenantId })}`,
+      `/services${buildQuery({
+        tenantId,
+        includeInactive: options?.includeInactive ? "true" : undefined,
+      })}`,
+    );
+  },
+
+  createService(payload: {
+    name: string;
+    description?: string;
+    price: number;
+    durationMin: number;
+  }) {
+    return request<ApiService>("/services", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  updateService(
+    id: string,
+    payload: {
+      name?: string;
+      description?: string | null;
+      price?: number;
+      durationMin?: number;
+      isActive?: boolean;
+    },
+  ) {
+    return request<ApiService>(`/services/${id}`, {
+      method: "PATCH",
+      body: payload,
+    });
+  },
+
+  deactivateService(id: string) {
+    return request<ApiService>(`/services/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  applyServiceTemplates() {
+    return request<{ created: ApiService[]; skipped: number }>(
+      "/services/templates/apply",
+      { method: "POST" },
     );
   },
 
@@ -1279,6 +1324,8 @@ export const api = {
     password: string;
     role: ApiStaffRole;
     tenantId?: string;
+    commissionRate?: number;
+    asaasWalletId?: string | null;
   }) {
     return request<ApiUser>("/users", {
       method: "POST",
@@ -1301,6 +1348,8 @@ export const api = {
       phone?: string;
       password?: string;
       role?: ApiStaffRole;
+      commissionRate?: number;
+      asaasWalletId?: string | null;
     },
   ) {
     return request<ApiUser>(`/users/${id}`, {
