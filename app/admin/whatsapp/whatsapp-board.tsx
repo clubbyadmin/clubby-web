@@ -26,6 +26,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 const PROVIDER_LABELS: Record<ApiWhatsappProvider, string> = {
@@ -40,11 +41,13 @@ const TYPE_LABELS: Record<ApiWhatsappMessageType, string> = {
   WAITLIST: "Fila de espera",
   MARKETING: "Marketing",
   MANUAL: "Manual",
+  INBOUND: "Recebida",
 };
 
 const STATUS_STYLE: Record<ApiWhatsappMessageStatus, string> = {
   SENT: "bg-emerald-400/10 text-emerald-300 ring-emerald-400/25",
   FAILED: "bg-red-400/10 text-red-300 ring-red-400/25",
+  RECEIVED: "bg-sky-400/10 text-sky-300 ring-sky-400/25",
 };
 
 export function WhatsappBoard() {
@@ -236,6 +239,8 @@ export function WhatsappBoard() {
               icon={Send}
             />
           </section>
+
+          <ConversationTester />
 
           <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
             <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-5">
@@ -611,5 +616,108 @@ function TemplateField({
         className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
       />
     </label>
+  );
+}
+
+function ConversationTester() {
+  const [phone, setPhone] = useState("5511900000001");
+  const [text, setText] = useState("oi");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Array<{ from: "cliente" | "salao"; text: string }>>(
+    [],
+  );
+  const [appointmentId, setAppointmentId] = useState<string | null>(null);
+  const [aiEnabled, setAiEnabled] = useState<boolean | null>(null);
+
+  async function handleSend(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const outgoing = text.trim();
+
+    if (!outgoing) {
+      return;
+    }
+
+    setSending(true);
+    setError(null);
+    setMessages((current) => [...current, { from: "cliente", text: outgoing }]);
+    setText("");
+
+    try {
+      const result = await api.simulateWhatsappConversation({
+        from: phone,
+        text: outgoing,
+      });
+      setAiEnabled(result.ai);
+      if (result.appointmentId) {
+        setAppointmentId(result.appointmentId);
+      }
+      setMessages((current) => [...current, { from: "salao", text: result.reply }]);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
+      <h2 className="text-sm font-semibold text-zinc-100">Testar conversa</h2>
+      <p className="mt-1 max-w-2xl text-sm text-zinc-500">
+        Escreva como no WhatsApp. A IA escolhe serviço, profissional, dia e
+        horário dentro do catálogo real. SIM grava o atendimento na agenda.
+        Nenhuma mensagem sai para um telefone.
+      </p>
+      {aiEnabled === false ? (
+        <p className="mt-2 text-sm text-amber-200">
+          A chave de IA ainda não está neste ambiente. Dá para seguir pelo
+          número, e o horário continua sendo gravado.
+        </p>
+      ) : null}
+      {appointmentId ? (
+        <p className="mt-2 text-sm text-emerald-300">
+          Horário gravado na agenda.{" "}
+          <Link href="/admin/agenda" className="underline">
+            Abrir agenda
+          </Link>
+        </p>
+      ) : null}
+      <div className="mt-4 space-y-3">
+        {messages.map((message, index) => (
+          <p
+            key={`${message.from}-${index}`}
+            className={
+              message.from === "cliente"
+                ? "ml-auto max-w-xl whitespace-pre-wrap rounded-2xl bg-zinc-800 px-4 py-3 text-sm text-zinc-100"
+                : "max-w-xl whitespace-pre-wrap rounded-2xl bg-zinc-900 px-4 py-3 text-sm text-zinc-300"
+            }
+          >
+            {message.text}
+          </p>
+        ))}
+      </div>
+      <form onSubmit={(event) => void handleSend(event)} className="mt-4 grid gap-3 sm:grid-cols-[180px_1fr_auto]">
+        <input
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
+          aria-label="WhatsApp do cliente"
+          className="h-11 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+        />
+        <input
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          aria-label="Mensagem"
+          className="h-11 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+        />
+        <button
+          type="submit"
+          disabled={sending}
+          className="h-11 rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-zinc-950 disabled:opacity-50"
+        >
+          {sending ? "Enviando..." : "Enviar"}
+        </button>
+      </form>
+      {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
+    </section>
   );
 }

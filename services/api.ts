@@ -467,8 +467,9 @@ export type ApiWhatsappMessageType =
   | "BIRTHDAY"
   | "WAITLIST"
   | "MARKETING"
-  | "MANUAL";
-export type ApiWhatsappMessageStatus = "SENT" | "FAILED";
+  | "MANUAL"
+  | "INBOUND";
+export type ApiWhatsappMessageStatus = "SENT" | "FAILED" | "RECEIVED";
 export type ApiWhatsappConnectionStatus =
   | "NOT_CONFIGURED"
   | "CONNECTED"
@@ -1854,6 +1855,18 @@ export const api = {
 
   upsertWhatsappConfig(payload: UpsertWhatsappConfigPayload) {
     return request<ApiWhatsappConfig>("/whatsapp/config", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  simulateWhatsappConversation(payload: { from: string; text: string }) {
+    return request<{
+      reply: string;
+      step: string;
+      appointmentId: string | null;
+      ai: boolean;
+    }>("/whatsapp/conversation", {
       method: "POST",
       body: payload,
     });
