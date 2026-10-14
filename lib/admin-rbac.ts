@@ -212,6 +212,20 @@ export const DEMO_STAFF_LOGINS: Array<{
   { role: "PROFESSIONAL", label: "Profissional", phone: "5511910000001" },
 ];
 
+const DEMO_BARBER_STAFF_LOGINS: typeof DEMO_STAFF_LOGINS = [
+  { role: "ADMIN", label: "Gestor", phone: "5511988000001" },
+  { role: "RECEPTIONIST", label: "Recepção", phone: "5511988000002" },
+  { role: "PROFESSIONAL", label: "Profissional", phone: "5511988000003" },
+];
+
+export function demoStaffLogins(slug: string | null | undefined) {
+  if (slug === "demo-barber") {
+    return DEMO_BARBER_STAFF_LOGINS;
+  }
+
+  return DEMO_STAFF_LOGINS;
+}
+
 export function isManagerRole(role: ApiUserRole | null | undefined) {
   return role === "ADMIN" || role === "SUPER_ADMIN";
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { BookingFlow } from "@/app/(client)/agendar/booking-flow";
+import { CustomerEntry } from "@/app/[slug]/customer-entry";
 import { TenantBrand } from "@/components/tenant-brand";
 import { useTenant } from "@/contexts/tenant-context";
 import { formatCurrency } from "@/lib/mock-data";
@@ -111,6 +112,8 @@ export function TenantShopHome() {
           </Link>
         )}
       </div>
+
+      <CustomerEntry />
 
       <section className="mt-10">
         <div className="mb-3 flex items-center gap-2">

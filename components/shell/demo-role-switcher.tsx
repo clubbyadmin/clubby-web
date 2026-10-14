@@ -3,7 +3,7 @@
 import { useAdminSession } from "@/contexts/admin-session-context";
 import { useTenant } from "@/contexts/tenant-context";
 import {
-  DEMO_STAFF_LOGINS,
+  demoStaffLogins,
   homePathForRole,
 } from "@/lib/admin-rbac";
 import { isDemoMode } from "@/lib/app-mode";
@@ -68,7 +68,7 @@ export function DemoRoleSwitcher({
         Trocar perfil (demo)
       </p>
       <div className={cn("grid gap-1", compact && "grid-cols-3")}>
-        {DEMO_STAFF_LOGINS.map((item) => {
+        {demoStaffLogins(tenant.slug).map((item) => {
           const active = user?.role === item.role && user.phone === item.phone;
 
           return (

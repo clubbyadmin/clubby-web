@@ -139,6 +139,13 @@ export function BookingFlow({ embedded = false }: BookingFlowProps) {
 
   useEffect(() => {
     void loadBookingData();
+
+    function onCustomerSession() {
+      void loadBookingData();
+    }
+
+    window.addEventListener("clubby-customer-session", onCustomerSession);
+    return () => window.removeEventListener("clubby-customer-session", onCustomerSession);
   }, [loadBookingData]);
 
   useEffect(() => {

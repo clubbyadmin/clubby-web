@@ -1268,6 +1268,50 @@ export const api = {
     });
   },
 
+  startCustomerEmail(slug: string, email: string) {
+    return request<{ challengeId: string; previewCode: string | null }>(
+      "/auth/customer/email",
+      { method: "POST", body: { slug, email } },
+    );
+  },
+
+  verifyCustomerEmail(challengeId: string, code: string) {
+    return request<{ pendingToken: string }>("/auth/customer/email/verify", {
+      method: "POST",
+      body: { challengeId, code },
+    });
+  },
+
+  startCustomerProvider(provider: "google" | "apple" | "microsoft", slug: string) {
+    return request<{ url: string }>(
+      `/auth/customer/start${buildQuery({ provider, slug })}`,
+    );
+  },
+
+  startCustomerPhone(pendingToken: string, phone: string) {
+    return request<{ challengeId: string; phone: string; previewCode: string | null }>(
+      "/auth/customer/phone",
+      { method: "POST", body: { pendingToken, phone } },
+    );
+  },
+
+  confirmCustomerPhone(challengeId: string, code: string) {
+    return request<{
+      accessToken: string;
+      user: {
+        id: string;
+        tenantId: string;
+        name: string;
+        email: string | null;
+        phone: string;
+        role: "CUSTOMER";
+      };
+    }>("/auth/customer/phone/confirm", {
+      method: "POST",
+      body: { challengeId, code },
+    });
+  },
+
   seedTestEnvironment() {
     return request<ApiTestSeedResult>("/test-tools/seed", {
       method: "POST",
