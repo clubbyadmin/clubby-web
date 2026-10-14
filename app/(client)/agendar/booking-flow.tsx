@@ -8,8 +8,6 @@ import {
   formatCurrency,
   formatShortDate,
   getAvailableDates,
-  professionals as fallbackProfessionals,
-  services as fallbackServices,
   timeSlots,
   type Professional,
   type Service,
@@ -30,8 +28,6 @@ import {
   Clock3,
   Loader2,
   Scissors,
-  Sparkles,
-  Star,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -94,8 +90,6 @@ export function BookingFlow({ embedded = false }: BookingFlowProps) {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [clientId, setClientId] = useState<string | null>(null);
   const [fromApi, setFromApi] = useState(false);
-  const [usingFallback, setUsingFallback] = useState(false);
-  const [catalogWarning, setCatalogWarning] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -110,13 +104,11 @@ export function BookingFlow({ embedded = false }: BookingFlowProps) {
   const [confirmed, setConfirmed] = useState(false);
   const [confirmedSummary, setConfirmedSummary] = useState<string | null>(null);
 
-  const applyCatalog = useCallback((catalog: BookingCatalog, warning?: string) => {
+  const applyCatalog = useCallback((catalog: BookingCatalog) => {
     setServices(catalog.services);
     setProfessionals(catalog.professionals);
     setClientId(catalog.clientId);
     setFromApi(catalog.fromApi);
-    setUsingFallback(!catalog.fromApi);
-    setCatalogWarning(warning ?? null);
     setError(null);
   }, []);
 
@@ -127,22 +119,16 @@ export function BookingFlow({ embedded = false }: BookingFlowProps) {
 
     setLoading(true);
     setError(null);
-    setCatalogWarning(null);
 
     try {
       const catalog = await withTimeout(fetchBookingCatalog(tenantId), API_LOAD_TIMEOUT_MS);
       applyCatalog(catalog);
     } catch (requestError) {
-      const message = getErrorMessage(requestError);
-      applyCatalog(
-        {
-          services: fallbackServices,
-          professionals: fallbackProfessionals,
-          clientId: null,
-          fromApi: false,
-        },
-        `${message} Exibindo catálogo local — a confirmação exige a API.`,
-      );
+      setError(getErrorMessage(requestError));
+      setServices([]);
+      setProfessionals([]);
+      setClientId(null);
+      setFromApi(false);
     } finally {
       setLoading(false);
     }
@@ -160,14 +146,14 @@ export function BookingFlow({ embedded = false }: BookingFlowProps) {
 
     if (!fromApi || !tenantId) {
       setSubmitError(
-        "Não foi possível conectar à API. Verifique se o backend está em http://localhost:3000 e tente novamente.",
+        "Não foi possível falar com o salão agora. Tente de novo em instantes.",
       );
       return;
     }
 
     if (!clientId) {
       setSubmitError(
-        "Nenhum cliente cadastrado no tenant. Crie um usuário CUSTOMER via POST /users.",
+        "Entre com a conta do cliente para confirmar este horário.",
       );
       return;
     }
@@ -289,47 +275,19 @@ export function BookingFlow({ embedded = false }: BookingFlowProps) {
     <div className={frameClass}>
       {heading}
 
-      {catalogWarning || usingFallback ? (
-        <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-          <AlertCircle className="mt-0.5 size-4 shrink-0 text-amber-400" />
-          <div className="min-w-0 flex-1">
-            <p>{catalogWarning ?? "Usando dados locais temporariamente."}</p>
-            <button
-              type="button"
-              onClick={() => void loadBookingData()}
-              className="mt-1 text-xs font-medium text-amber-300 underline"
-            >
-              Tentar conectar à API novamente
-            </button>
-          </div>
+      <div className="mb-6">
+        <div className="mb-2 flex items-center justify-between text-xs text-zinc-500">
+          <span>
+            {step} de {steps.length}
+          </span>
+          <span className="text-zinc-300">{steps[step - 1]}</span>
         </div>
-      ) : null}
-
-      <div className="mb-6 grid grid-cols-4 gap-2">
-        {steps.map((label, index) => {
-          const stepNumber = (index + 1) as BookingStep;
-          const isActive = step === stepNumber;
-          const isDone = step > stepNumber;
-
-          return (
-            <div key={label} className="flex flex-col items-center gap-2">
-              <span
-                className={`inline-flex size-8 items-center justify-center rounded-full text-xs font-semibold ${
-                  isActive
-                    ? "bg-amber-400 text-zinc-950"
-                    : isDone
-                      ? "bg-amber-400/20 text-amber-400"
-                      : "bg-zinc-900 text-zinc-500 ring-1 ring-zinc-800"
-                }`}
-              >
-                {stepNumber}
-              </span>
-              <span className="text-center text-[10px] leading-tight text-zinc-500">
-                {label}
-              </span>
-            </div>
-          );
-        })}
+        <div className="h-1 overflow-hidden rounded-full bg-zinc-800">
+          <div
+            className="h-full rounded-full bg-[var(--accent)] transition-all"
+            style={{ width: `${(step / steps.length) * 100}%` }}
+          />
+        </div>
       </div>
 
       {step === 1 ? (
@@ -413,10 +371,6 @@ export function BookingFlow({ embedded = false }: BookingFlowProps) {
                     <span className="mt-0.5 block text-xs text-zinc-400">
                       {professional.role}
                     </span>
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-400">
-                    <Star className="size-3.5 fill-amber-400" />
-                    {professional.rating.toFixed(1)}
                   </span>
                 </button>
               );
@@ -564,10 +518,7 @@ export function BookingFlow({ embedded = false }: BookingFlowProps) {
                 Confirmando...
               </>
             ) : (
-              <>
-                <Sparkles className="size-4" />
-                Confirmar agendamento
-              </>
+            <>Confirmar agendamento</>
             )}
           </button>
         )}
@@ -602,7 +553,7 @@ function getFriendlySubmitError(message: string): string {
   }
 
   if (normalized.includes("network") || normalized.includes("fetch")) {
-    return "Não foi possível falar com o servidor. Confira se a API está rodando na porta 3000.";
+    return "Não foi possível falar com o salão agora. Tente de novo em instantes.";
   }
 
   return message || "Não foi possível confirmar o agendamento. Tente novamente.";

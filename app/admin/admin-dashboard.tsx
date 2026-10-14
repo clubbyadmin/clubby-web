@@ -5,6 +5,7 @@ import { AdminNav } from "@/components/admin-nav";
 import { AccentIconWrap } from "@/components/shell/accent-ui";
 import { TenantBadge } from "@/components/tenant-brand";
 import { useTenant } from "@/contexts/tenant-context";
+import { isDemoMode } from "@/lib/app-mode";
 import { cn } from "@/lib/cn";
 import { formatCurrency } from "@/lib/mock-data";
 import {
@@ -15,15 +16,12 @@ import {
 } from "@/services/api";
 import {
   CalendarDays,
-  CircleDollarSign,
-  Clock3,
   Palette,
   Scissors,
-  TrendingUp,
   UserRound,
   Users,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 
 type AdminTab = "overview" | "team" | "services";
 
@@ -31,33 +29,6 @@ const tabs: { id: AdminTab; label: string }[] = [
   { id: "overview", label: "Visão geral" },
   { id: "team", label: "Equipe" },
   { id: "services", label: "Serviços" },
-];
-
-const overviewMetrics = [
-  {
-    label: "Faturamento do dia",
-    value: "R$ 1.240,00",
-    icon: CircleDollarSign,
-    trend: "+12% vs ontem",
-  },
-  {
-    label: "Agendamentos hoje",
-    value: "18",
-    icon: CalendarDays,
-    trend: "6 confirmados",
-  },
-  {
-    label: "Comissões do dia",
-    value: "R$ 420,00",
-    icon: TrendingUp,
-    trend: "3 profissionais",
-  },
-];
-
-const teamScheduleMock = [
-  { professional: "Carlos Mendes", slots: "09:00 · 11:30 · 15:30" },
-  { professional: "Rafael Souza", slots: "10:00 · 14:00 · 16:30" },
-  { professional: "Lucas Almeida", slots: "09:30 · 13:00 · 17:00" },
 ];
 
 const themePresets = [
@@ -108,17 +79,6 @@ export function AdminDashboard() {
     }
   }
 
-  const scheduleRows = useMemo(() => {
-    if (staff.length === 0) {
-      return teamScheduleMock;
-    }
-
-    return staff.map((member, index) => ({
-      professional: member.name,
-      slots: teamScheduleMock[index]?.slots ?? "Sem horários publicados",
-    }));
-  }, [staff]);
-
   return (
     <div className="relative flex flex-1 flex-col px-4 pb-4 pt-6 sm:px-6 lg:px-10 xl:px-12">
       <header className="mb-6 lg:mb-8">
@@ -150,32 +110,17 @@ export function AdminDashboard() {
 
       {activeTab === "overview" ? (
         <section className="space-y-4 xl:space-y-6">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {overviewMetrics.map((metric) => (
-              <article
-                key={metric.label}
-                className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-zinc-500">
-                      {metric.label}
-                    </p>
-                    <p className="mt-2 text-2xl font-bold text-zinc-50">
-                      {metric.value}
-                    </p>
-                    <p className="mt-1 text-xs text-[var(--accent)]">
-                      {metric.trend}
-                    </p>
-                  </div>
-                  <AccentIconWrap className="size-11">
-                    <metric.icon className="size-5" strokeWidth={2.2} />
-                  </AccentIconWrap>
-                </div>
-              </article>
-            ))}
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">
+              {tenant.name}
+            </h1>
+            <p className="mt-1 max-w-xl text-sm text-zinc-500">
+              A agenda, os clientes e o caixa ficam nos itens do menu. Este
+              início não mostra números estimados.
+            </p>
           </div>
 
+          {isDemoMode() ? (
           <article className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4">
             <div className="mb-4 flex items-center gap-2">
               <Palette className="size-4 text-[var(--accent)]" />
@@ -206,6 +151,7 @@ export function AdminDashboard() {
               ))}
             </div>
           </article>
+          ) : null}
         </section>
       ) : null}
 
@@ -254,25 +200,13 @@ export function AdminDashboard() {
                 <div className="mb-4 flex items-center gap-2">
                   <CalendarDays className="size-4 text-[var(--accent)]" />
                   <h2 className="text-sm font-semibold text-zinc-100">
-                    Agenda da equipe (hoje)
+                    Onde ver a agenda
                   </h2>
                 </div>
-                <div className="space-y-3">
-                  {scheduleRows.map((row) => (
-                    <div
-                      key={row.professional}
-                      className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-3"
-                    >
-                      <p className="text-sm font-medium text-zinc-100">
-                        {row.professional}
-                      </p>
-                      <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-zinc-400">
-                        <Clock3 className="size-3.5 text-[var(--accent)]" />
-                        {row.slots}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+                <p className="text-sm leading-relaxed text-zinc-400">
+                  Os horários do dia estão na Agenda, com o status real de cada
+                  atendimento. Esta tela não inventa slots.
+                </p>
               </div>
               </div>
             </>
@@ -318,12 +252,6 @@ export function AdminDashboard() {
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="mt-4 w-full rounded-xl border border-zinc-800 px-3 py-2.5 text-xs font-medium text-zinc-300 transition hover:border-zinc-700"
-                >
-                  Editar preço e duração
-                </button>
               </article>
             ))}
             </div>

@@ -6,6 +6,7 @@ import {
   DEMO_STAFF_LOGINS,
   homePathForRole,
 } from "@/lib/admin-rbac";
+import { isDemoMode } from "@/lib/app-mode";
 import { cn } from "@/lib/cn";
 import { api, getErrorMessage } from "@/services/api";
 import { useRouter } from "next/navigation";
@@ -26,7 +27,7 @@ export function DemoRoleSwitcher({
   const [pendingRole, setPendingRole] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  if (tenant.id === "local") {
+  if (!isDemoMode() || tenant.id === "local") {
     return null;
   }
 

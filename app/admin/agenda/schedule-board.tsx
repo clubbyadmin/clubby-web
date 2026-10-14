@@ -2,8 +2,6 @@
 
 import { LoadingState } from "@/components/api-state";
 import { AdminNav } from "@/components/admin-nav";
-import { AccentIconWrap } from "@/components/shell/accent-ui";
-import { TenantBadge } from "@/components/tenant-brand";
 import { useTenant } from "@/contexts/tenant-context";
 import { StaffSelect } from "@/components/staff-select";
 import { cn } from "@/lib/cn";
@@ -35,7 +33,6 @@ import {
   Clock3,
   MoreHorizontal,
   RefreshCw,
-  UserRound,
   X,
 } from "lucide-react";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
@@ -350,21 +347,21 @@ export function ScheduleBoard() {
 
   return (
     <div className="relative flex flex-1 flex-col px-4 pb-4 pt-6 sm:px-6 lg:px-10 xl:px-12">
-      <header className="mb-4 flex flex-col gap-4 lg:mb-6 lg:flex-row lg:items-start lg:justify-between">
+      <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <TenantBadge />
-          <p className="mt-3 text-sm text-zinc-400">
-            Grade de agendamentos · {tenant.name}
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">
+            Agenda
+          </h1>
+          <p className="mt-1 text-sm text-zinc-500">{tenant.name}</p>
         </div>
 
         <button
           type="button"
           onClick={() => setWalkInOpen(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-strong)] px-4 py-3 text-sm font-semibold text-zinc-950 shadow-lg shadow-[color-mix(in_srgb,var(--accent)_20%,transparent)]"
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-zinc-950"
         >
           <CalendarPlus className="size-4" />
-          Walk-in / encaixe manual
+          Novo horário
         </button>
       </header>
 
@@ -402,28 +399,25 @@ export function ScheduleBoard() {
         </div>
       ) : null}
 
-      <section className="mb-4 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
-        <div className="flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
+      <section className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/60 px-2 py-1.5">
           <button
             type="button"
             onClick={() => shiftDate(-1)}
-            className="inline-flex size-10 items-center justify-center rounded-xl border border-zinc-800 text-zinc-300 hover:border-zinc-700"
+            className="inline-flex size-9 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
             aria-label="Dia anterior"
           >
             <ChevronLeft className="size-5" />
           </button>
 
-          <div className="text-center">
-            <p className="text-xs uppercase tracking-wide text-zinc-500">Data</p>
-            <p className="text-sm font-semibold capitalize text-zinc-100">
-              {formatDisplayDate(selectedDate)}
-            </p>
-          </div>
+          <p className="truncate text-sm font-medium capitalize text-zinc-100">
+            {formatDisplayDate(selectedDate)}
+          </p>
 
           <button
             type="button"
             onClick={() => shiftDate(1)}
-            className="inline-flex size-10 items-center justify-center rounded-xl border border-zinc-800 text-zinc-300 hover:border-zinc-700"
+            className="inline-flex size-9 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
             aria-label="Próximo dia"
           >
             <ChevronRight className="size-5" />
@@ -433,15 +427,12 @@ export function ScheduleBoard() {
         <button
           type="button"
           onClick={() => setSelectedDate(new Date())}
-          className="rounded-2xl border border-zinc-800 bg-zinc-900/80 px-4 py-3 text-sm font-medium text-zinc-200 hover:border-zinc-700"
+          className="rounded-full px-3 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-900"
         >
           Hoje
         </button>
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 px-3 py-2.5 sm:min-w-[280px]">
-          <span className="mb-1 block text-xs uppercase tracking-wide text-zinc-500">
-            Profissional
-          </span>
+        <div className="sm:min-w-56">
           <StaffSelect
             value={selectedStaffId}
             onChange={setSelectedStaffId}
@@ -486,19 +477,9 @@ export function ScheduleBoard() {
                 key={`head-${member.id}`}
                 className="sticky top-0 z-20 border-b border-r border-zinc-800 bg-zinc-950/95 px-3 py-3 last:border-r-0 backdrop-blur"
               >
-                <div className="flex items-center gap-2">
-                  <AccentIconWrap className="size-8 rounded-full">
-                    <UserRound className="size-3.5" />
-                  </AccentIconWrap>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-zinc-100">
-                      {member.name}
-                    </span>
-                    <span className="mt-0.5 block truncate text-[11px] text-zinc-500">
-                      {member.email || "Sem e-mail"}
-                    </span>
-                  </span>
-                </div>
+                <span className="block truncate text-sm font-semibold text-zinc-100">
+                  {member.name}
+                </span>
               </div>
             ))}
 
@@ -585,10 +566,10 @@ export function ScheduleBoard() {
                         }));
                         setWalkInOpen(true);
                       }}
-                      className="group min-h-16 border-b border-r border-zinc-800 p-2 text-left transition last:border-r-0 hover:bg-[color-mix(in_srgb,var(--accent)_6%,transparent)]"
+                      className="group min-h-16 border-b border-r border-zinc-800 p-2 text-left transition last:border-r-0 hover:bg-zinc-900/80"
                     >
-                      <span className="text-[11px] font-medium text-zinc-600 group-hover:text-[var(--accent)]">
-                        Livre · encaixe rápido
+                      <span className="text-[11px] font-medium text-transparent group-hover:text-zinc-400">
+                        Encaixar
                       </span>
                     </button>
                   );
@@ -599,11 +580,6 @@ export function ScheduleBoard() {
         </div>
         )}
       </section>
-
-      <p className="mt-4 text-xs text-zinc-500">
-        Agenda sincronizada com a API em tempo real. Alterações de status e
-        remarcações são persistidas no servidor.
-      </p>
 
       {walkInOpen ? (
         <WalkInModal
@@ -784,7 +760,7 @@ function WalkInModal({
       <div className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-950 p-5 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-zinc-50">
-            Agendamento walk-in
+            Novo horário
           </h2>
           <button
             type="button"
@@ -879,9 +855,9 @@ function WalkInModal({
           <button
             type="submit"
             disabled={submitting || !form.clientId || !form.serviceId}
-            className="w-full rounded-2xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-strong)] px-4 py-3 text-sm font-semibold text-zinc-950 disabled:opacity-50"
+            className="w-full rounded-full bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-zinc-950 disabled:opacity-50"
           >
-            {submitting ? "Salvando..." : "Confirmar encaixe"}
+            {submitting ? "Salvando..." : "Confirmar horário"}
           </button>
         </form>
       </div>

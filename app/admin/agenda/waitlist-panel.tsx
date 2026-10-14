@@ -54,6 +54,7 @@ export function WaitlistPanel({
   onJoin,
 }: WaitlistPanelProps) {
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [form, setForm] = useState<WaitlistForm>({
     clientId: customers[0]?.id ?? "",
     serviceId: services[0]?.id ?? "",
@@ -69,25 +70,19 @@ export function WaitlistPanel({
   }
 
   return (
-    <section className="mb-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <Hourglass
-              className="size-4 text-[var(--accent)]"
-              strokeWidth={2.2}
-            />
-            <h2 className="text-sm font-semibold text-zinc-100">
-              Fila de Espera Ativa
-            </h2>
-            <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[11px] font-semibold text-zinc-300">
-              {entries.length}
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-zinc-500">
-            Encaixe automático se alguém cancelar até 1 hora antes do horário.
-          </p>
-        </div>
+    <section className="mb-4 rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setExpanded((current) => !current)}
+          className="flex min-w-0 items-center gap-2 text-left"
+        >
+          <Hourglass className="size-4 text-zinc-500" strokeWidth={1.8} />
+          <span className="text-sm font-medium text-zinc-200">
+            Fila de espera
+          </span>
+          <span className="text-xs text-zinc-500">{entries.length}</span>
+        </button>
 
         <button
           type="button"
@@ -107,15 +102,18 @@ export function WaitlistPanel({
         </button>
       </div>
 
-      {loading ? (
-        <p className="mt-4 text-sm text-zinc-500">Carregando fila...</p>
-      ) : entries.length === 0 ? (
-        <p className="mt-4 rounded-xl border border-dashed border-zinc-800 px-4 py-5 text-center text-sm text-zinc-500">
-          Ninguém na fila neste dia. Inclua um cliente para ocupar a cadeira
-          vazia no cancelamento de última hora.
+      {expanded && loading ? (
+        <p className="mt-3 text-sm text-zinc-500">Carregando fila...</p>
+      ) : null}
+
+      {expanded && !loading && entries.length === 0 ? (
+        <p className="mt-3 text-sm text-zinc-500">
+          Ninguém esperando neste dia.
         </p>
-      ) : (
-        <ul className="mt-4 grid gap-2 lg:grid-cols-2">
+      ) : null}
+
+      {expanded && !loading && entries.length > 0 ? (
+        <ul className="mt-3 grid gap-2 lg:grid-cols-2">
           {entries.map((entry, index) => (
             <li
               key={entry.id}
@@ -143,7 +141,7 @@ export function WaitlistPanel({
             </li>
           ))}
         </ul>
-      )}
+      ) : null}
 
       {open ? (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-4 md:items-center">

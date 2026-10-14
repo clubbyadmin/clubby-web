@@ -1,3 +1,4 @@
+import { isDemoMode } from "@/lib/app-mode";
 import type { ApiUserRole } from "@/services/api";
 import {
   Bell,
@@ -31,6 +32,7 @@ export type AdminNavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
+  group: "Operação" | "Receita" | "Crescimento" | "Conta";
   roles: ApiUserRole[];
   match: (pathname: string, search: string) => boolean;
 };
@@ -45,15 +47,17 @@ const FRONT_DESK_ROLES: ApiUserRole[] = [
 export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   {
     href: "/admin",
-    label: "Dashboard",
+    label: "Início",
     icon: LayoutDashboard,
+    group: "Operação",
     roles: MANAGER_ROLES,
     match: (pathname) => pathname === "/admin",
   },
   {
     href: "/admin/agenda",
-    label: "Agenda Kanban",
+    label: "Agenda",
     icon: CalendarDays,
+    group: "Operação",
     roles: FRONT_DESK_ROLES,
     match: (pathname) => pathname.startsWith("/admin/agenda"),
   },
@@ -61,6 +65,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     href: "/admin/meu-painel",
     label: "Meu Painel",
     icon: CalendarClock,
+    group: "Operação",
     roles: ["PROFESSIONAL"],
     match: (pathname) =>
       pathname === "/admin/meu-painel" ||
@@ -69,8 +74,9 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   },
   {
     href: "/admin/meu-painel/comissoes",
-    label: "Extrato de Comissões",
+    label: "Comissões",
     icon: Wallet,
+    group: "Receita",
     roles: ["PROFESSIONAL"],
     match: (pathname) => pathname.startsWith("/admin/meu-painel/comissoes"),
   },
@@ -78,6 +84,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     href: "/admin/clientes",
     label: "Clientes",
     icon: Users,
+    group: "Operação",
     roles: FRONT_DESK_ROLES,
     match: (pathname, search) =>
       pathname.startsWith("/admin/clientes") &&
@@ -87,6 +94,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     href: "/admin/clientes?tab=lembretes",
     label: "Lembretes",
     icon: Bell,
+    group: "Operação",
     roles: ["RECEPTIONIST"],
     match: (pathname, search) =>
       pathname.startsWith("/admin/clientes") &&
@@ -96,6 +104,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     href: "/admin/financeiro",
     label: "Financeiro",
     icon: Wallet,
+    group: "Receita",
     roles: MANAGER_ROLES,
     match: (pathname) =>
       pathname === "/admin/financeiro" ||
@@ -106,6 +115,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     href: "/admin/financeiro/comissoes",
     label: "Comissões",
     icon: Scale,
+    group: "Receita",
     roles: MANAGER_ROLES,
     match: (pathname) => pathname.startsWith("/admin/financeiro/comissoes"),
   },
@@ -113,6 +123,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     href: "/admin/marketing",
     label: "Marketing",
     icon: Megaphone,
+    group: "Crescimento",
     roles: MANAGER_ROLES,
     match: (pathname) => pathname.startsWith("/admin/marketing"),
   },
@@ -120,13 +131,15 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     href: "/admin/whatsapp",
     label: "WhatsApp",
     icon: MessageCircle,
+    group: "Operação",
     roles: FRONT_DESK_ROLES,
     match: (pathname) => pathname.startsWith("/admin/whatsapp"),
   },
   {
     href: "/admin/usuarios",
-    label: "Usuários",
+    label: "Equipe",
     icon: UserCog,
+    group: "Conta",
     roles: MANAGER_ROLES,
     match: (pathname) => pathname.startsWith("/admin/usuarios"),
   },
@@ -134,6 +147,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     href: "/admin/gestao",
     label: "Metas",
     icon: Target,
+    group: "Crescimento",
     roles: MANAGER_ROLES,
     match: (pathname) => pathname.startsWith("/admin/gestao"),
   },
@@ -141,6 +155,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     href: "/admin/estoque",
     label: "Estoque",
     icon: Package,
+    group: "Receita",
     roles: MANAGER_ROLES,
     match: (pathname) => pathname.startsWith("/admin/estoque"),
   },
@@ -148,6 +163,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     href: "/admin/assinaturas",
     label: "Clube",
     icon: Crown,
+    group: "Receita",
     roles: MANAGER_ROLES,
     match: (pathname) => pathname.startsWith("/admin/assinaturas"),
   },
@@ -155,6 +171,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     href: "/admin/testes",
     label: "Testes",
     icon: FlaskConical,
+    group: "Conta",
     roles: MANAGER_ROLES,
     match: (pathname) => pathname.startsWith("/admin/testes"),
   },
@@ -162,6 +179,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     href: "/super-admin",
     label: "Plataforma",
     icon: ShieldCheck,
+    group: "Conta",
     roles: ["SUPER_ADMIN"],
     match: (pathname) => pathname.startsWith("/super-admin"),
   },
@@ -194,7 +212,17 @@ export function navItemsForRole(role: ApiUserRole | null | undefined) {
     return [];
   }
 
-  return ADMIN_NAV_ITEMS.filter((item) => item.roles.includes(role));
+  return ADMIN_NAV_ITEMS.filter((item) => {
+    if (!item.roles.includes(role)) {
+      return false;
+    }
+
+    if (item.href === "/admin/testes" && !isDemoMode()) {
+      return false;
+    }
+
+    return true;
+  });
 }
 
 export function homePathForRole(role: ApiUserRole | null | undefined) {

@@ -12,6 +12,7 @@ import {
   isManagerRole,
   ROLE_LABELS,
 } from "@/lib/admin-rbac";
+import { isDemoMode } from "@/lib/app-mode";
 import { cn } from "@/lib/cn";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
@@ -25,7 +26,7 @@ export function AdminShell({ children }: AdminShellProps) {
   const session = useAdminSessionOptional();
   const router = useRouter();
   const role = session?.user?.role ?? null;
-  const showClientSwitcher = isManagerRole(role);
+  const showClientSwitcher = isDemoMode() && isManagerRole(role);
   const user = session?.user;
 
   return (
