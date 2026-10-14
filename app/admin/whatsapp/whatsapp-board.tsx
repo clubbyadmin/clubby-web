@@ -21,13 +21,14 @@ import {
   CalendarClock,
   Loader2,
   MessageCircle,
+  Mic,
   PlugZap,
   Send,
   Sparkles,
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const PROVIDER_LABELS: Record<ApiWhatsappProvider, string> = {
   MOCK: "Simulador Clubby (dev)",
@@ -630,28 +631,39 @@ function ConversationTester() {
   );
   const [appointmentId, setAppointmentId] = useState<string | null>(null);
   const [aiEnabled, setAiEnabled] = useState<boolean | null>(null);
+  const [recording, setRecording] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
 
-  async function handleSend(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const outgoing = text.trim();
-
-    if (!outgoing) {
-      return;
-    }
-
+  async function sendTurn(payload: {
+    text?: string;
+    audioBase64?: string;
+    mimeType?: string;
+    clientText: string;
+  }) {
     setSending(true);
     setError(null);
-    setMessages((current) => [...current, { from: "cliente", text: outgoing }]);
-    setText("");
+    setMessages((current) => [...current, { from: "cliente", text: payload.clientText }]);
 
     try {
       const result = await api.simulateWhatsappConversation({
         from: phone,
-        text: outgoing,
+        text: payload.text,
+        audioBase64: payload.audioBase64,
+        mimeType: payload.mimeType,
       });
       setAiEnabled(result.ai);
       if (result.appointmentId) {
         setAppointmentId(result.appointmentId);
+      }
+      if (result.transcript) {
+        setMessages((current) => {
+          const next = [...current];
+          const last = next[next.length - 1];
+          if (last?.from === "cliente") {
+            next[next.length - 1] = { ...last, text: `Áudio: ${result.transcript}` };
+          }
+          return next;
+        });
       }
       setMessages((current) => [...current, { from: "salao", text: result.reply }]);
     } catch (requestError) {
@@ -661,13 +673,63 @@ function ConversationTester() {
     }
   }
 
+  async function handleSend(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const outgoing = text.trim();
+
+    if (!outgoing) {
+      return;
+    }
+
+    setText("");
+    await sendTurn({ text: outgoing, clientText: outgoing });
+  }
+
+  async function sendAudio(file: Blob) {
+    const audioBase64 = await blobToBase64(file);
+    await sendTurn({
+      audioBase64,
+      mimeType: file.type || "audio/webm",
+      clientText: "Áudio",
+    });
+  }
+
+  async function toggleRecording() {
+    if (recording && recorderRef.current) {
+      recorderRef.current.stop();
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        setRecording(false);
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        void sendAudio(blob);
+      };
+      recorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch {
+      setError("O navegador não liberou o microfone.");
+    }
+  }
+
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
       <h2 className="text-sm font-semibold text-zinc-100">Testar conversa</h2>
       <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-        Escreva como no WhatsApp. A IA escolhe serviço, profissional, dia e
-        horário dentro do catálogo real. SIM grava o atendimento na agenda.
-        Nenhuma mensagem sai para um telefone.
+        Escreva ou grave um áudio como no WhatsApp. Nomes com erro de digitação
+        e horários como 09h45 entram na conversa. Se o horário não estiver livre,
+        a recepção oferece o mais perto ou a fila. Nenhuma mensagem sai para um telefone.
       </p>
       {aiEnabled === false ? (
         <p className="mt-2 text-sm text-zinc-500">
@@ -713,13 +775,49 @@ function ConversationTester() {
         />
         <button
           type="submit"
-          disabled={sending}
+          disabled={sending || recording}
           className="h-11 rounded-full bg-[var(--accent)] px-4 text-sm font-semibold text-zinc-950 disabled:opacity-50"
         >
           {sending ? "Enviando..." : "Enviar"}
         </button>
       </form>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => void toggleRecording()}
+          disabled={sending}
+          className="inline-flex h-10 items-center gap-2 rounded-full border border-zinc-700 px-4 text-sm text-zinc-200 disabled:opacity-50"
+        >
+          <Mic className="h-4 w-4" />
+          {recording ? "Parar e enviar" : "Gravar áudio"}
+        </button>
+        <label className="inline-flex h-10 cursor-pointer items-center rounded-full border border-zinc-700 px-4 text-sm text-zinc-200">
+          Enviar arquivo
+          <input
+            type="file"
+            accept="audio/*"
+            className="sr-only"
+            disabled={sending || recording}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) {
+                void sendAudio(file);
+              }
+            }}
+          />
+        </label>
+      </div>
       {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
     </section>
   );
+}
+
+function blobToBase64(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
 }

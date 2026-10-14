@@ -1860,12 +1860,18 @@ export const api = {
     });
   },
 
-  simulateWhatsappConversation(payload: { from: string; text: string }) {
+  simulateWhatsappConversation(payload: {
+    from: string;
+    text?: string;
+    audioBase64?: string;
+    mimeType?: string;
+  }) {
     return request<{
       reply: string;
       step: string;
       appointmentId: string | null;
       ai: boolean;
+      transcript?: string | null;
     }>("/whatsapp/conversation", {
       method: "POST",
       body: payload,
