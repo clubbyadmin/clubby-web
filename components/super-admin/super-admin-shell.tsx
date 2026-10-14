@@ -6,12 +6,13 @@ import { ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { SuperAdminGate } from "@/components/super-admin/super-admin-gate";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 
 export function SuperAdminShell({ children }: { children: ReactNode }) {
   const { user, clearSession } = useAdminSession();
   const pathname = usePathname();
+  const router = useRouter();
 
   return (
     <div className="relative min-h-full bg-[#070709] text-zinc-100">
@@ -84,7 +85,10 @@ export function SuperAdminShell({ children }: { children: ReactNode }) {
             {user ? (
               <button
                 type="button"
-                onClick={clearSession}
+                onClick={() => {
+                  clearSession();
+                  router.push("/login");
+                }}
                 className="rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-medium text-zinc-400 ring-1 ring-zinc-800 hover:text-zinc-200"
               >
                 Sair

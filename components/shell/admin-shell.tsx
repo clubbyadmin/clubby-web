@@ -13,6 +13,7 @@ import {
   ROLE_LABELS,
 } from "@/lib/admin-rbac";
 import { cn } from "@/lib/cn";
+import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
 type AdminShellProps = {
@@ -22,6 +23,7 @@ type AdminShellProps = {
 export function AdminShell({ children }: AdminShellProps) {
   const themeStyle = useTenantThemeStyle();
   const session = useAdminSessionOptional();
+  const router = useRouter();
   const role = session?.user?.role ?? null;
   const showClientSwitcher = isManagerRole(role);
   const user = session?.user;
@@ -51,6 +53,16 @@ export function AdminShell({ children }: AdminShellProps) {
                   {firstNameFrom(user.name)}
                 </p>
                 <p className="text-xs text-zinc-500">{ROLE_LABELS[user.role]}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    session?.clearSession();
+                    router.push("/login");
+                  }}
+                  className="mt-3 w-full rounded-full bg-zinc-950 px-3 py-2 text-xs font-semibold text-zinc-300 ring-1 ring-zinc-800 hover:text-zinc-100"
+                >
+                  Sair
+                </button>
               </div>
             ) : null}
             <DemoRoleSwitcher />
@@ -60,8 +72,20 @@ export function AdminShell({ children }: AdminShellProps) {
 
         <div className="relative flex min-h-full min-w-0 flex-1 flex-col">
           <ShellGradient />
-          <div className="sticky top-0 z-20 px-4 pt-4 lg:hidden">
-            <DemoRoleSwitcher compact />
+          <div className="sticky top-0 z-20 flex items-start justify-between gap-3 px-4 pt-4 lg:hidden">
+            <DemoRoleSwitcher compact className="min-w-0 flex-1" />
+            {user ? (
+              <button
+                type="button"
+                onClick={() => {
+                  session?.clearSession();
+                  router.push("/login");
+                }}
+                className="shrink-0 rounded-full bg-zinc-900 px-3 py-2 text-xs font-semibold text-zinc-300 ring-1 ring-zinc-800"
+              >
+                Sair
+              </button>
+            ) : null}
           </div>
           <main
             className={cn(
