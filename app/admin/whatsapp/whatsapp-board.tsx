@@ -670,9 +670,10 @@ function ConversationTester() {
         Nenhuma mensagem sai para um telefone.
       </p>
       {aiEnabled === false ? (
-        <p className="mt-2 text-sm text-amber-200">
-          A chave de IA ainda não está neste ambiente. Dá para seguir pelo
-          número, e o horário continua sendo gravado.
+        <p className="mt-2 text-sm text-zinc-500">
+          A voz da recepção entra quando a chave do modelo estiver no servidor.
+          Enquanto isso, a conversa segue pelo catálogo e o horário continua
+          sendo gravado.
         </p>
       ) : null}
       {appointmentId ? (
