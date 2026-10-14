@@ -632,8 +632,27 @@ function ConversationTester() {
   const [appointmentId, setAppointmentId] = useState<string | null>(null);
   const [aiEnabled, setAiEnabled] = useState<boolean | null>(null);
   const [aiNote, setAiNote] = useState<string | null>(null);
+  const [policy, setPolicy] = useState<"rotation" | "newest">("rotation");
+  const [savingPolicy, setSavingPolicy] = useState(false);
   const [recording, setRecording] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
+
+  useEffect(() => {
+    void api.getAssignmentPolicy().then((result) => setPolicy(result.policy)).catch(() => undefined);
+  }, []);
+
+  async function choosePolicy(next: "rotation" | "newest") {
+    setSavingPolicy(true);
+    setError(null);
+    try {
+      const saved = await api.saveAssignmentPolicy(next);
+      setPolicy(saved.policy);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setSavingPolicy(false);
+    }
+  }
 
   async function sendTurn(payload: {
     text?: string;
@@ -728,7 +747,21 @@ function ConversationTester() {
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
       <h2 className="text-sm font-semibold text-zinc-100">Testar conversa</h2>
-      <p className="mt-1 max-w-2xl text-sm text-zinc-500">
+      <div className="mt-3 flex flex-wrap gap-2">
+        <PolicyButton
+          active={policy === "rotation"}
+          disabled={savingPolicy}
+          onClick={() => void choosePolicy("rotation")}
+          label="Roleta do dia"
+        />
+        <PolicyButton
+          active={policy === "newest"}
+          disabled={savingPolicy}
+          onClick={() => void choosePolicy("newest")}
+          label="Sempre o mais novo"
+        />
+      </div>
+      <p className="mt-2 max-w-2xl text-sm text-zinc-500">
         Escreva ou grave um áudio como no WhatsApp. Nomes com erro de digitação
         e horários como 09h45 entram na conversa. Se o horário não estiver livre,
         a recepção oferece o mais perto ou a fila. Nenhuma mensagem sai para um telefone.
@@ -810,6 +843,33 @@ function ConversationTester() {
       </div>
       {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
     </section>
+  );
+}
+
+function PolicyButton({
+  active,
+  disabled,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  disabled: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={
+        active
+          ? "h-9 rounded-full bg-zinc-100 px-3 text-xs font-semibold text-zinc-950"
+          : "h-9 rounded-full border border-zinc-700 px-3 text-xs text-zinc-300"
+      }
+    >
+      {label}
+    </button>
   );
 }
 

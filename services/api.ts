@@ -1860,6 +1860,17 @@ export const api = {
     });
   },
 
+  getAssignmentPolicy() {
+    return request<{ policy: "rotation" | "newest" }>("/whatsapp/assignment-policy");
+  },
+
+  saveAssignmentPolicy(policy: "rotation" | "newest") {
+    return request<{ policy: "rotation" | "newest" }>("/whatsapp/assignment-policy", {
+      method: "POST",
+      body: { policy },
+    });
+  },
+
   simulateWhatsappConversation(payload: {
     from: string;
     text?: string;
