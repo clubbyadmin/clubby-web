@@ -1871,6 +1871,7 @@ export const api = {
       step: string;
       appointmentId: string | null;
       ai: boolean;
+      aiNote?: string | null;
       transcript?: string | null;
     }>("/whatsapp/conversation", {
       method: "POST",

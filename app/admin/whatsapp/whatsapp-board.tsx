@@ -631,6 +631,7 @@ function ConversationTester() {
   );
   const [appointmentId, setAppointmentId] = useState<string | null>(null);
   const [aiEnabled, setAiEnabled] = useState<boolean | null>(null);
+  const [aiNote, setAiNote] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
 
@@ -652,6 +653,7 @@ function ConversationTester() {
         mimeType: payload.mimeType,
       });
       setAiEnabled(result.ai);
+      setAiNote(result.aiNote ?? null);
       if (result.appointmentId) {
         setAppointmentId(result.appointmentId);
       }
@@ -731,12 +733,10 @@ function ConversationTester() {
         e horários como 09h45 entram na conversa. Se o horário não estiver livre,
         a recepção oferece o mais perto ou a fila. Nenhuma mensagem sai para um telefone.
       </p>
-      {aiEnabled === false ? (
-        <p className="mt-2 text-sm text-zinc-500">
-          A voz da recepção entra quando a chave do modelo estiver no servidor.
-          Enquanto isso, a conversa segue pelo catálogo e o horário continua
-          sendo gravado.
-        </p>
+      {aiNote ? (
+        <p className="mt-2 text-sm text-amber-200">{aiNote}</p>
+      ) : aiEnabled ? (
+        <p className="mt-2 text-sm text-zinc-500">A OpenAI foi chamada nesta mensagem.</p>
       ) : null}
       {appointmentId ? (
         <p className="mt-2 text-sm text-emerald-300">
