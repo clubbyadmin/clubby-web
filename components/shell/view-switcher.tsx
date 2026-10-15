@@ -34,10 +34,10 @@ export function ViewSwitcher({ mode }: ViewSwitcherProps) {
   return (
     <nav
       className={cn(
-        "z-50 border-t border-zinc-800/80 bg-zinc-950/95 backdrop-blur-md",
+        "z-50 border-t border-zinc-800/80 bg-zinc-950",
         mode === "client"
-          ? "fixed inset-x-0 bottom-0 px-4 py-3"
-          : "fixed inset-x-0 bottom-0 px-4 py-3 lg:static lg:border-t-0 lg:bg-transparent lg:px-0 lg:py-0 lg:backdrop-blur-none",
+          ? "fixed inset-x-0 bottom-0 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+          : "fixed inset-x-0 bottom-0 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:static lg:border-t-0 lg:bg-transparent lg:px-0 lg:py-0",
       )}
     >
       <div
@@ -54,6 +54,15 @@ export function ViewSwitcher({ mode }: ViewSwitcherProps) {
             <Link
               key={href}
               href={href}
+              prefetch={false}
+              onClick={(event) => {
+                if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                  return;
+                }
+
+                event.preventDefault();
+                window.location.assign(href);
+              }}
               className={cn(
                 "inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-3 text-sm font-medium transition",
                 active
