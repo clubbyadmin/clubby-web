@@ -1,6 +1,7 @@
 "use client";
 
 import { AdminNav } from "@/components/admin-nav";
+import { AdminMobileNav } from "@/components/shell/admin-mobile-nav";
 import { DemoRoleSwitcher } from "@/components/shell/demo-role-switcher";
 import { ShellGradient } from "@/components/shell/accent-ui";
 import { ViewSwitcher } from "@/components/shell/view-switcher";
@@ -13,9 +14,8 @@ import {
   ROLE_LABELS,
 } from "@/lib/admin-rbac";
 import { isDemoMode } from "@/lib/app-mode";
-import { cn } from "@/lib/cn";
 import { useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 type AdminShellProps = {
   children: ReactNode;
@@ -88,19 +88,12 @@ export function AdminShell({ children }: AdminShellProps) {
               </button>
             ) : null}
           </div>
-          <main
-            className={cn(
-              "relative flex min-h-full flex-1 flex-col lg:pb-8",
-              showClientSwitcher ? "pb-20" : "pb-8",
-            )}
-          >
+          <main className="relative flex min-h-full flex-1 flex-col pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-8">
             {children}
           </main>
-          {showClientSwitcher ? (
-            <div className="lg:hidden">
-              <ViewSwitcher mode="admin" />
-            </div>
-          ) : null}
+          <Suspense fallback={null}>
+            <AdminMobileNav />
+          </Suspense>
         </div>
       </div>
     </div>
