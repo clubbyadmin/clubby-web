@@ -141,6 +141,7 @@ export type ApiPlatformTenant = {
     clubMembers: number;
     branches: number;
     services?: number;
+    clients?: number;
   };
   completeness?: ApiPartnerCompleteness;
   inviteStatus?: "MUST_CHANGE_PASSWORD" | "READY" | "MISSING_EMAIL";
@@ -1589,6 +1590,80 @@ export const api = {
     }>(`/super-admin/tenants/${id}/invite`, {
       method: "POST",
       body: {},
+    });
+  },
+
+  getSuperAdminTenantWhatsapp(id: string) {
+    return request<ApiWhatsappConfig>(`/super-admin/tenants/${id}/whatsapp`);
+  },
+
+  upsertSuperAdminTenantWhatsapp(
+    id: string,
+    payload: Omit<UpsertWhatsappConfigPayload, "tenantId">,
+  ) {
+    return request<ApiWhatsappConfig>(`/super-admin/tenants/${id}/whatsapp`, {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  getSuperAdminTenantWhatsappLogs(id: string) {
+    return request<ApiMessageLog[]>(
+      `/super-admin/tenants/${id}/whatsapp/logs`,
+    );
+  },
+
+  sendSuperAdminTenantWhatsapp(
+    id: string,
+    payload: Omit<SendWhatsappPayload, "tenantId">,
+  ) {
+    return request<ApiMessageLog>(`/super-admin/tenants/${id}/whatsapp/send`, {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  getSuperAdminTenantClients(id: string, q?: string) {
+    return request<{
+      total: number;
+      items: Array<{
+        id: string;
+        name: string;
+        phone: string;
+        email: string | null;
+        birthDate: string | null;
+        notes: string | null;
+        historyCount: number;
+        createdAt: string;
+        updatedAt: string;
+      }>;
+    }>(`/super-admin/tenants/${id}/clients${buildQuery({ q })}`);
+  },
+
+  importSuperAdminTenantClients(
+    id: string,
+    rows: Array<{
+      name?: string;
+      phone?: string;
+      email?: string | null;
+      birthDate?: string | null;
+      notes?: string | null;
+      lastService?: string | null;
+      lastVisitAt?: string | null;
+    }>,
+  ) {
+    return request<{
+      tenantId: string;
+      received: number;
+      created: number;
+      updated: number;
+      historyCreated: number;
+      failed: number;
+      errors: Array<{ row: number; phone?: string; message: string }>;
+      message: string;
+    }>(`/super-admin/tenants/${id}/clients/import`, {
+      method: "POST",
+      body: { rows },
     });
   },
 

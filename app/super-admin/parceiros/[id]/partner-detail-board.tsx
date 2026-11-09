@@ -2,7 +2,6 @@
 
 import { ErrorState, LoadingState } from "@/components/api-state";
 import {
-  BUSINESS_TYPE_LABELS,
   BUSINESS_TYPES,
   TENANT_STATUS_LABELS,
   type BusinessType,
@@ -26,12 +25,17 @@ import {
   ArrowLeft,
   FileText,
   Mail,
+  MessageCircle,
   Printer,
   Save,
   ScrollText,
+  Upload,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { PartnerMigrationPanel } from "./partner-migration-panel";
+import { Field, Section, Stat } from "./partner-shared";
+import { PartnerWhatsappPanel } from "./partner-whatsapp-panel";
 
 const STATUS_STYLE: Record<TenantLifecycleStatus, string> = {
   PENDING: "bg-amber-400/10 text-amber-300 ring-amber-400/25",
@@ -61,7 +65,25 @@ const VERTICAL_OPTIONS: Array<{ id: TenantVertical; label: string }> = [
   { id: "CLINIC", label: "Estética / clínica" },
 ];
 
+type PartnerTab =
+  | "visao"
+  | "cadastro"
+  | "plano"
+  | "whatsapp"
+  | "contratos"
+  | "migracao";
+
+const TABS: Array<{ id: PartnerTab; label: string; step: string }> = [
+  { id: "visao", label: "Visão geral", step: "1" },
+  { id: "cadastro", label: "Cadastro", step: "2" },
+  { id: "plano", label: "Plano e módulos", step: "3" },
+  { id: "whatsapp", label: "WhatsApp", step: "4" },
+  { id: "contratos", label: "Contratos", step: "5" },
+  { id: "migracao", label: "Migração", step: "6" },
+];
+
 export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
+  const [tab, setTab] = useState<PartnerTab>("visao");
   const [tenant, setTenant] = useState<ApiPlatformTenant | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -160,12 +182,11 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
     void load();
   }, [load]);
 
-  async function fillAddressFromCep(raw: string) {
-    const digits = digitsOnly(raw);
+  async function fillAddressFromCep(rawCep: string) {
+    const digits = digitsOnly(rawCep);
     if (digits.length !== 8 || digits === lastLookedCep) {
       return;
     }
-
     setLookingCep(true);
     setCepHint("Buscando endereço...");
     try {
@@ -249,6 +270,7 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
       const contract = await api.issueSuperAdminPartnerContract(partnerId);
       setPreviewHtml(contract.bodyHtml ?? null);
       setNotice(`Contrato ${contract.version} emitido.`);
+      setTab("contratos");
       await load();
     } catch (requestError) {
       setError(getErrorMessage(requestError));
@@ -295,6 +317,22 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
       return [...current, vertical];
     });
   }
+
+  const missingHints = useMemo(() => {
+    const missing = tenant?.completeness?.missing ?? [];
+    return missing.map((item) => {
+      const lower = item.toLowerCase();
+      let target: PartnerTab = "cadastro";
+      if (lower.includes("contrato")) target = "contratos";
+      else if (lower.includes("whatsapp") || lower.includes("bot"))
+        target = "whatsapp";
+      else if (lower.includes("serviço") || lower.includes("servico"))
+        target = "visao";
+      else if (lower.includes("vertical") || lower.includes("plano"))
+        target = "plano";
+      return { label: item, target };
+    });
+  }, [tenant?.completeness?.missing]);
 
   if (loading) {
     return (
@@ -373,10 +411,7 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
       {apiOutdated ? (
         <p className="mb-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
           A API de produção ainda não foi atualizada. Plano, completude e invite
-          só funcionam depois do rebuild no Lightsail (
-          <code className="text-xs">git pull</code> +{" "}
-          <code className="text-xs">docker compose ... up -d --build api</code>
-          ).
+          só funcionam depois do rebuild no Lightsail.
         </p>
       ) : null}
       {error ? <p className="mb-4 text-sm text-red-300">{error}</p> : null}
@@ -388,250 +423,383 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
         </p>
       ) : null}
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-4">
+      <div className="mb-5 grid gap-3 sm:grid-cols-5">
         <Stat label="Mensalidade" value={formatCurrency(tenant.platformFee)} />
         <Stat label="Completude" value={`${score}%`} />
         <Stat label="Usuários" value={String(tenant.counts?.users ?? 0)} />
+        <Stat label="Clientes" value={String(tenant.counts?.clients ?? 0)} />
         <Stat label="Serviços" value={String(tenant.counts?.services ?? 0)} />
       </div>
 
-      {tenant.completeness?.missing?.length ? (
-        <Section title="O que falta no cadastro">
-          <ul className="space-y-1 text-sm text-zinc-400">
-            {tenant.completeness.missing.map((item) => (
-              <li key={item}>• {item}</li>
-            ))}
-          </ul>
-        </Section>
+      <nav className="mb-6 flex gap-2 overflow-x-auto pb-1">
+        {TABS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setTab(item.id)}
+            className={cn(
+              "inline-flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-xs font-semibold transition",
+              tab === item.id
+                ? "bg-amber-300 text-zinc-950"
+                : "border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-zinc-100",
+            )}
+          >
+            <span
+              className={cn(
+                "inline-flex size-5 items-center justify-center rounded-full text-[10px]",
+                tab === item.id
+                  ? "bg-zinc-950/15 text-zinc-950"
+                  : "bg-zinc-800 text-zinc-400",
+              )}
+            >
+              {item.step}
+            </span>
+            {item.label}
+          </button>
+        ))}
+      </nav>
+
+      {tab === "visao" ? (
+        <div className="space-y-5">
+          <Section
+            title="Passo a passo do onboarding"
+            description="Use as sub-telas para configurar o parceiro completo em um só lugar."
+          >
+            <div className="grid gap-2 sm:grid-cols-2">
+              {TABS.filter((item) => item.id !== "visao").map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setTab(item.id)}
+                  className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-left transition hover:border-amber-400/40"
+                >
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+                    Passo {item.step}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-zinc-100">
+                    {item.label}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </Section>
+
+          {missingHints.length ? (
+            <Section title="O que falta no cadastro">
+              <ul className="space-y-2">
+                {missingHints.map((item) => (
+                  <li key={item.label}>
+                    <button
+                      type="button"
+                      onClick={() => setTab(item.target)}
+                      className="text-left text-sm text-zinc-300 hover:text-amber-300"
+                    >
+                      • {item.label}
+                      <span className="ml-2 text-[11px] text-zinc-500">
+                        ir para {TABS.find((tabItem) => tabItem.id === item.target)?.label}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          ) : (
+            <Section title="Cadastro">
+              <p className="text-sm text-emerald-300">
+                Completude em 100%. Parceiro pronto para operação.
+              </p>
+            </Section>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setTab("whatsapp")}
+              className="inline-flex items-center gap-3 rounded-3xl border border-zinc-800 bg-zinc-900/40 px-5 py-4 text-left"
+            >
+              <MessageCircle className="size-5 text-amber-300" />
+              <span>
+                <span className="block text-sm font-semibold text-zinc-100">
+                  WhatsApp do cliente
+                </span>
+                <span className="text-xs text-zinc-500">
+                  {tenant.whatsappConfig?.isActive
+                    ? "Bot ativo"
+                    : "Configurar conexão e automações"}
+                </span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("migracao")}
+              className="inline-flex items-center gap-3 rounded-3xl border border-zinc-800 bg-zinc-900/40 px-5 py-4 text-left"
+            >
+              <Upload className="size-5 text-amber-300" />
+              <span>
+                <span className="block text-sm font-semibold text-zinc-100">
+                  Migrar base de clientes
+                </span>
+                <span className="text-xs text-zinc-500">
+                  Importar CSV de concorrentes
+                </span>
+              </span>
+            </button>
+          </div>
+        </div>
       ) : null}
 
-      <form onSubmit={(event) => void handleSave(event)} className="mt-6 space-y-6">
-        <Section title="Plano e mensalidade">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-xs text-zinc-400">
-              Plano SaaS
-              <select
-                value={platformPlan}
-                onChange={(event) => {
-                  const next = event.target.value as ApiPlatformPlan;
-                  setPlatformPlan(next);
-                  if (planFees?.[next] != null) {
-                    setPlatformFee(String(planFees[next]));
+      {tab === "cadastro" ? (
+        <form onSubmit={(event) => void handleSave(event)} className="space-y-5">
+          <Section title="Estabelecimento">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Nome" value={name} onChange={setName} />
+              <Field label="Documento" value={document} onChange={setDocument} />
+              <Field
+                label="WhatsApp cadastrado"
+                value={whatsappNumber}
+                onChange={setWhatsappNumber}
+              />
+              <label className="text-xs text-zinc-400">
+                Tipo de negócio (âncora)
+                <select
+                  value={businessType}
+                  onChange={(event) =>
+                    setBusinessType(event.target.value as BusinessType)
                   }
-                }}
-                className="mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-              >
-                {(Object.keys(PLAN_LABELS) as ApiPlatformPlan[]).map((plan) => (
-                  <option key={plan} value={plan}>
-                    {PLAN_LABELS[plan]}
-                    {planFees?.[plan] != null
-                      ? ` · R$ ${planFees[plan]}`
-                      : ""}
-                  </option>
-                ))}
-              </select>
-              <span className="mt-1 block text-[11px] text-zinc-500">
-                Valores padrão em{" "}
-                <a href="/super-admin/planos" className="text-amber-300">
-                  Planos
-                </a>
-                . A mensalidade abaixo pode ser customizada neste parceiro.
-              </span>
-            </label>
-            <Field
-              label="Mensalidade (R$)"
-              value={platformFee}
-              onChange={setPlatformFee}
-            />
-            <label className="text-xs text-zinc-400">
-              Status
-              <select
-                value={status}
-                onChange={(event) =>
-                  setStatus(event.target.value as TenantLifecycleStatus)
-                }
-                className="mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-              >
-                {Object.entries(TENANT_STATUS_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </Section>
+                  className="mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                >
+                  {BUSINESS_TYPES.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Field
+                label="Slug (vitrine)"
+                value={tenant.slug}
+                onChange={() => undefined}
+                readOnly
+              />
+            </div>
+          </Section>
 
-        <Section title="Estabelecimento">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Nome" value={name} onChange={setName} />
-            <Field label="Documento" value={document} onChange={setDocument} />
-            <Field
-              label="WhatsApp cadastrado"
-              value={whatsappNumber}
-              onChange={setWhatsappNumber}
-            />
-            <label className="text-xs text-zinc-400">
-              Tipo de negócio (âncora)
-              <select
-                value={businessType}
-                onChange={(event) =>
-                  setBusinessType(event.target.value as BusinessType)
-                }
-                className="mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-              >
-                {BUSINESS_TYPES.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Field
-              label="Slug (vitrine)"
-              value={tenant.slug}
-              onChange={() => undefined}
-              readOnly
-            />
-          </div>
-        </Section>
+          <Section
+            title="Responsável / 1º acesso"
+            description={`Convite envia senha temporária. Status: ${tenant.inviteStatus ?? "—"}.`}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field
+                label="Nome do responsável"
+                value={ownerName}
+                onChange={setOwnerName}
+              />
+              <Field
+                label="E-mail de acesso"
+                value={ownerEmail}
+                onChange={setOwnerEmail}
+                type="email"
+              />
+              <Field
+                label="Telefone do responsável"
+                value={ownerPhone}
+                onChange={setOwnerPhone}
+              />
+            </div>
+          </Section>
 
-        <Section title="Verticais ativas no mesmo estabelecimento">
-          <p className="mb-3 text-xs text-zinc-500">
-            Microempreendedor multi-serviço: ligue Unhas + Estética + Barbearia
-            no mesmo tenant.
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {VERTICAL_OPTIONS.map((option) => {
-              const checked = enabledVerticals.includes(option.id);
-              return (
+          <Section title="Endereço">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-xs text-zinc-400">
+                CEP
+                <input
+                  value={zipCode}
+                  inputMode="numeric"
+                  onChange={(event) => {
+                    const next = formatCep(event.target.value);
+                    setZipCode(next);
+                    setCepHint(null);
+                    if (digitsOnly(next).length === 8) {
+                      void fillAddressFromCep(next);
+                    }
+                  }}
+                  onBlur={() => void fillAddressFromCep(zipCode)}
+                  className="mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                />
+                <span className="mt-1 block text-[11px] text-zinc-500">
+                  {lookingCep ? "Buscando endereço..." : cepHint}
+                </span>
+              </label>
+              <Field label="Rua" value={street} onChange={setStreet} required={false} />
+              <Field
+                label="Número"
+                value={number}
+                onChange={setNumber}
+                required={false}
+              />
+              <Field
+                label="Bairro"
+                value={neighborhood}
+                onChange={setNeighborhood}
+                required={false}
+              />
+              <Field label="Cidade" value={city} onChange={setCity} required={false} />
+              <Field label="UF" value={state} onChange={setState} required={false} />
+            </div>
+          </Section>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-amber-300 px-5 text-sm font-semibold text-zinc-950 disabled:opacity-60"
+            >
+              <Save className="size-4" />
+              {saving ? "Salvando..." : "Salvar cadastro"}
+            </button>
+          </div>
+        </form>
+      ) : null}
+
+      {tab === "plano" ? (
+        <form onSubmit={(event) => void handleSave(event)} className="space-y-5">
+          <Section title="Plano e mensalidade">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-xs text-zinc-400">
+                Plano SaaS
+                <select
+                  value={platformPlan}
+                  onChange={(event) => {
+                    const next = event.target.value as ApiPlatformPlan;
+                    setPlatformPlan(next);
+                    if (planFees?.[next] != null) {
+                      setPlatformFee(String(planFees[next]));
+                    }
+                  }}
+                  className="mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                >
+                  {(Object.keys(PLAN_LABELS) as ApiPlatformPlan[]).map((plan) => (
+                    <option key={plan} value={plan}>
+                      {PLAN_LABELS[plan]}
+                      {planFees?.[plan] != null ? ` · R$ ${planFees[plan]}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-[11px] text-zinc-500">
+                  Valores padrão em{" "}
+                  <a href="/super-admin/planos" className="text-amber-300">
+                    Planos
+                  </a>
+                  .
+                </span>
+              </label>
+              <Field
+                label="Mensalidade (R$)"
+                value={platformFee}
+                onChange={setPlatformFee}
+              />
+              <label className="text-xs text-zinc-400">
+                Status
+                <select
+                  value={status}
+                  onChange={(event) =>
+                    setStatus(event.target.value as TenantLifecycleStatus)
+                  }
+                  className="mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+                >
+                  {Object.entries(TENANT_STATUS_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </Section>
+
+          <Section
+            title="Verticais ativas"
+            description="Ligue Unhas + Estética + Barbearia no mesmo tenant."
+          >
+            <div className="grid gap-2 sm:grid-cols-2">
+              {VERTICAL_OPTIONS.map((option) => {
+                const checked = enabledVerticals.includes(option.id);
+                return (
+                  <label
+                    key={option.id}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm",
+                      checked
+                        ? "border-amber-400/40 bg-amber-400/10 text-amber-100"
+                        : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleVertical(option.id)}
+                      className="size-4 accent-amber-300"
+                    />
+                    {option.label}
+                  </label>
+                );
+              })}
+            </div>
+          </Section>
+
+          <Section title="Módulos de produto">
+            <div className="grid gap-2 sm:grid-cols-3">
+              {(
+                [
+                  ["membershipClub", "Clube / assinatura"],
+                  ["inventory", "Estoque"],
+                  ["financial", "Financeiro"],
+                ] as const
+              ).map(([key, label]) => (
                 <label
-                  key={option.id}
-                  className={cn(
-                    "flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm",
-                    checked
-                      ? "border-amber-400/40 bg-amber-400/10 text-amber-100"
-                      : "border-zinc-800 bg-zinc-950 text-zinc-300",
-                  )}
+                  key={key}
+                  className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200"
                 >
                   <input
                     type="checkbox"
-                    checked={checked}
-                    onChange={() => toggleVertical(option.id)}
+                    checked={features[key]}
+                    onChange={(event) =>
+                      setFeatures((current) => ({
+                        ...current,
+                        [key]: event.target.checked,
+                      }))
+                    }
                     className="size-4 accent-amber-300"
                   />
-                  {option.label}
+                  {label}
                 </label>
-              );
-            })}
+              ))}
+            </div>
+          </Section>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-amber-300 px-5 text-sm font-semibold text-zinc-950 disabled:opacity-60"
+            >
+              <Save className="size-4" />
+              {saving ? "Salvando..." : "Salvar plano"}
+            </button>
           </div>
-        </Section>
+        </form>
+      ) : null}
 
-        <Section title="Módulos de produto">
-          <div className="grid gap-2 sm:grid-cols-3">
-            {(
-              [
-                ["membershipClub", "Clube / assinatura"],
-                ["inventory", "Estoque"],
-                ["financial", "Financeiro"],
-              ] as const
-            ).map(([key, label]) => (
-              <label
-                key={key}
-                className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200"
-              >
-                <input
-                  type="checkbox"
-                  checked={features[key]}
-                  onChange={(event) =>
-                    setFeatures((current) => ({
-                      ...current,
-                      [key]: event.target.checked,
-                    }))
-                  }
-                  className="size-4 accent-amber-300"
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-        </Section>
+      {tab === "whatsapp" ? (
+        <PartnerWhatsappPanel partnerId={partnerId} onChanged={() => void load()} />
+      ) : null}
 
-        <Section title="Responsável / 1º acesso">
-          <p className="mb-3 text-xs text-zinc-500">
-            Convite envia e-mail com senha temporária e exige troca no primeiro
-            login. Status: {tenant.inviteStatus ?? "—"}.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Nome do responsável" value={ownerName} onChange={setOwnerName} />
-            <Field
-              label="E-mail de acesso"
-              value={ownerEmail}
-              onChange={setOwnerEmail}
-              type="email"
-            />
-            <Field
-              label="Telefone do responsável"
-              value={ownerPhone}
-              onChange={setOwnerPhone}
-            />
-          </div>
-        </Section>
-
-        <Section title="Endereço">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-xs text-zinc-400">
-              CEP
-              <input
-                value={zipCode}
-                inputMode="numeric"
-                onChange={(event) => {
-                  const next = formatCep(event.target.value);
-                  setZipCode(next);
-                  setCepHint(null);
-                  if (digitsOnly(next).length === 8) {
-                    void fillAddressFromCep(next);
-                  }
-                }}
-                onBlur={() => void fillAddressFromCep(zipCode)}
-                className="mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-              />
-              <span className="mt-1 block text-[11px] text-zinc-500">
-                {lookingCep ? "Buscando endereço..." : cepHint}
-              </span>
-            </label>
-            <Field label="Rua" value={street} onChange={setStreet} required={false} />
-            <Field label="Número" value={number} onChange={setNumber} required={false} />
-            <Field
-              label="Bairro"
-              value={neighborhood}
-              onChange={setNeighborhood}
-              required={false}
-            />
-            <Field label="Cidade" value={city} onChange={setCity} required={false} />
-            <Field label="UF" value={state} onChange={setState} required={false} />
-          </div>
-        </Section>
-
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-amber-300 px-5 text-sm font-semibold text-zinc-950 disabled:opacity-60"
-          >
-            <Save className="size-4" />
-            {saving ? "Salvando..." : "Salvar ficha"}
-          </button>
-        </div>
-      </form>
-
-      <div className="mt-6">
+      {tab === "contratos" ? (
         <Section title="Contratos">
           <div className="space-y-2">
             {(tenant.contracts ?? []).length === 0 ? (
               <p className="text-sm text-zinc-500">
-                Nenhum contrato emitido. Use “Gerar contrato” para criar a minuta
-                com os dados atuais.
+                Nenhum contrato emitido. Use “Gerar contrato” no topo.
               </p>
             ) : (
               tenant.contracts?.map((contract) => (
@@ -682,7 +850,14 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
             )}
           </div>
         </Section>
-      </div>
+      ) : null}
+
+      {tab === "migracao" ? (
+        <PartnerMigrationPanel
+          partnerId={partnerId}
+          onChanged={() => void load()}
+        />
+      ) : null}
 
       {previewHtml ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
@@ -726,56 +901,5 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
         </div>
       ) : null}
     </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-5">
-      <h3 className="mb-4 text-sm font-semibold text-zinc-100">{title}</h3>
-      {children}
-    </section>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 px-4 py-3">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-zinc-100">{value}</p>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  type = "text",
-  required = true,
-  readOnly = false,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-  required?: boolean;
-  readOnly?: boolean;
-}) {
-  return (
-    <label className="text-xs text-zinc-400">
-      {label}
-      <input
-        type={type}
-        required={required}
-        readOnly={readOnly}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className={cn(
-          "mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100",
-          readOnly && "opacity-70",
-        )}
-      />
-    </label>
   );
 }
