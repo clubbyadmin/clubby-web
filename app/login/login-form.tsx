@@ -57,15 +57,18 @@ function LoginForm() {
   const { user, setSession } = useAdminSession();
   const [email, setEmail] = useState(PLATFORM_SUPER_ADMIN_EMAIL);
   const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [code, setCode] = useState("");
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [emailHint, setEmailHint] = useState<string | null>(null);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (user) {
+    if (user && !user.mustChangePassword && !mustChangePassword) {
       router.replace(homePathForRole(user.role));
       return;
     }
@@ -73,25 +76,49 @@ function LoginForm() {
     const storedUser = readStoredAdminUser();
     const storedToken = getAccessToken();
 
-    if (storedToken && storedUser && storedUser.role !== "CUSTOMER") {
+    if (
+      storedToken &&
+      storedUser &&
+      storedUser.role !== "CUSTOMER" &&
+      !user
+    ) {
+      if (storedUser.mustChangePassword) {
+        setSession({ accessToken: storedToken, user: storedUser });
+        setMustChangePassword(true);
+        return;
+      }
       setSession({
         accessToken: storedToken,
         user: storedUser,
       });
     }
-  }, [router, setSession, user]);
+  }, [mustChangePassword, router, setSession, user]);
 
   function finishSession(session: {
     accessToken: string;
     deviceToken?: string | null;
-    user: AdminSessionUser;
+    mustChangePassword?: boolean;
+    user: AdminSessionUser & { mustChangePassword?: boolean };
   }) {
     writeDeviceToken(session.deviceToken);
+    const nextUser: AdminSessionUser = {
+      ...session.user,
+      mustChangePassword:
+        session.mustChangePassword ?? session.user.mustChangePassword,
+    };
     setSession({
       accessToken: session.accessToken,
-      user: session.user,
+      user: nextUser,
     });
-    router.replace(homePathForRole(session.user.role));
+
+    if (nextUser.mustChangePassword) {
+      setMustChangePassword(true);
+      setNewPassword("");
+      setConfirmPassword("");
+      return;
+    }
+
+    router.replace(homePathForRole(nextUser.role));
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -100,6 +127,24 @@ function LoginForm() {
     setSubmitting(true);
 
     try {
+      if (mustChangePassword) {
+        if (newPassword.length < 8) {
+          setError("A nova senha precisa ter ao menos 8 caracteres.");
+          return;
+        }
+        if (newPassword !== confirmPassword) {
+          setError("A confirmação da senha não confere.");
+          return;
+        }
+        const session = await api.changePassword({ newPassword });
+        finishSession({
+          ...session,
+          user: { ...session.user, mustChangePassword: false },
+          mustChangePassword: false,
+        });
+        return;
+      }
+
       if (challengeId) {
         const session = await api.verifyStaffMfa({
           challengeId,
@@ -139,6 +184,18 @@ function LoginForm() {
     }
   }
 
+  const title = mustChangePassword
+    ? "Defina sua nova senha"
+    : challengeId
+      ? "Confirme o acesso"
+      : "Entrar no Clubby";
+
+  const subtitle = mustChangePassword
+    ? "Por segurança, troque a senha temporária antes de entrar no painel."
+    : challengeId
+      ? `Enviamos um código para ${emailHint ?? "seu e-mail"}. Em aparelhos conhecidos, o próximo login pode pular esta etapa.`
+      : "Super-Admin vai para o painel global. Gestores e equipe usam o e-mail cadastrado no salão.";
+
   return (
     <div className="flex min-h-full flex-1 items-center justify-center px-5 py-16">
       <form
@@ -149,15 +206,40 @@ function LoginForm() {
           <ShieldCheck className="size-6" strokeWidth={1.8} />
         </div>
         <h1 className="mt-5 text-2xl font-semibold tracking-tight text-zinc-50">
-          {challengeId ? "Confirme o acesso" : "Entrar no Clubby"}
+          {title}
         </h1>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-          {challengeId
-            ? `Enviamos um código para ${emailHint ?? "seu e-mail"}. Em aparelhos conhecidos, o próximo login pode pular esta etapa.`
-            : "Super-Admin vai para o painel global. Gestores e equipe usam o e-mail cadastrado no salão."}
-        </p>
+        <p className="mt-2 text-sm leading-relaxed text-zinc-500">{subtitle}</p>
 
-        {!challengeId ? (
+        {mustChangePassword ? (
+          <>
+            <label className="mt-8 block">
+              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                Nova senha
+              </span>
+              <input
+                type="password"
+                required
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
+              />
+            </label>
+            <label className="mt-3 block">
+              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                Confirmar senha
+              </span>
+              <input
+                type="password"
+                required
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
+              />
+            </label>
+          </>
+        ) : !challengeId ? (
           <>
             <label className="mt-8 block">
               <span className="mb-1.5 block text-xs font-medium text-zinc-400">
@@ -229,9 +311,15 @@ function LoginForm() {
           disabled={submitting}
           className="mt-6 w-full rounded-xl bg-amber-300 px-4 py-3 text-sm font-semibold text-zinc-950 disabled:opacity-60"
         >
-          {submitting ? "Aguarde..." : challengeId ? "Confirmar código" : "Entrar"}
+          {submitting
+            ? "Aguarde..."
+            : mustChangePassword
+              ? "Salvar senha e entrar"
+              : challengeId
+                ? "Confirmar código"
+                : "Entrar"}
         </button>
-        {isDemoMode() && !challengeId ? (
+        {isDemoMode() && !challengeId && !mustChangePassword ? (
           <div className="mt-6 border-t border-zinc-800 pt-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
               Atalhos da demonstração

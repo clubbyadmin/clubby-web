@@ -93,6 +93,14 @@ export type ApiPartnerContract = {
   createdAt: string;
 };
 
+export type ApiPlatformPlan = "SOLO" | "ESSENCIAL" | "CRESCIMENTO" | "REDE";
+
+export type ApiPartnerCompleteness = {
+  score: number;
+  missing: string[];
+  checks: Array<{ key: string; label: string; ok: boolean }>;
+};
+
 export type ApiPlatformTenant = {
   id: string;
   slug: string;
@@ -101,6 +109,13 @@ export type ApiPlatformTenant = {
   whatsappNumber: string;
   businessType: BusinessType;
   vertical: TenantVertical;
+  platformPlan: ApiPlatformPlan;
+  enabledVerticals: TenantVertical[];
+  features: {
+    membershipClub: boolean;
+    inventory: boolean;
+    financial: boolean;
+  };
   status: TenantLifecycleStatus;
   platformFee: number;
   parentId: string | null;
@@ -118,14 +133,25 @@ export type ApiPlatformTenant = {
     email: string | null;
     phone: string;
     role: ApiUserRole;
+    mustChangePassword?: boolean;
   } | null;
   counts?: {
     users: number;
     appointments: number;
     clubMembers: number;
     branches: number;
+    services?: number;
   };
+  completeness?: ApiPartnerCompleteness;
+  inviteStatus?: "MUST_CHANGE_PASSWORD" | "READY" | "MISSING_EMAIL";
   contracts?: ApiPartnerContract[];
+  whatsappConfig?: {
+    isActive: boolean;
+    provider?: string;
+    phoneNumber?: string | null;
+    lastTestAt?: string | null;
+    lastError?: string | null;
+  } | null;
 };
 
 export type ApiTestSeedLogin = {
@@ -1278,6 +1304,7 @@ export const api = {
       | {
           accessToken: string;
           deviceToken?: string | null;
+          mustChangePassword?: boolean;
           user: {
             id: string;
             tenantId: string;
@@ -1285,6 +1312,7 @@ export const api = {
             email: string | null;
             phone: string;
             role: ApiUserRole;
+            mustChangePassword?: boolean;
           };
         }
       | {
@@ -1307,6 +1335,7 @@ export const api = {
     return request<{
       accessToken: string;
       deviceToken?: string | null;
+      mustChangePassword?: boolean;
       user: {
         id: string;
         tenantId: string;
@@ -1314,6 +1343,7 @@ export const api = {
         email: string | null;
         phone: string;
         role: ApiUserRole;
+        mustChangePassword?: boolean;
       };
     }>("/auth/mfa/verify", {
       method: "POST",
@@ -1519,7 +1549,14 @@ export const api = {
     payload: {
       status?: TenantLifecycleStatus;
       platformFee?: number;
+      platformPlan?: ApiPlatformPlan;
       businessType?: BusinessType;
+      enabledVerticals?: TenantVertical[];
+      features?: {
+        membershipClub?: boolean;
+        inventory?: boolean;
+        financial?: boolean;
+      };
       name?: string;
       document?: string;
       whatsappNumber?: string;
@@ -1536,6 +1573,41 @@ export const api = {
   ) {
     return request<ApiPlatformTenant>(`/super-admin/tenants/${id}`, {
       method: "PATCH",
+      body: payload,
+    });
+  },
+
+  inviteSuperAdminTenant(id: string) {
+    return request<{
+      tenantId: string;
+      tenantName: string;
+      slug: string;
+      emailed: boolean;
+      emailHint: string;
+      temporaryPassword: string | null;
+      message: string;
+    }>(`/super-admin/tenants/${id}/invite`, {
+      method: "POST",
+      body: {},
+    });
+  },
+
+  changePassword(payload: { currentPassword?: string; newPassword: string }) {
+    return request<{
+      accessToken: string;
+      deviceToken?: string | null;
+      mustChangePassword?: boolean;
+      user: {
+        id: string;
+        tenantId: string;
+        name: string;
+        email: string | null;
+        phone: string;
+        role: ApiUserRole;
+        mustChangePassword?: boolean;
+      };
+    }>("/auth/change-password", {
+      method: "POST",
       body: payload,
     });
   },

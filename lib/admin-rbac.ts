@@ -27,6 +27,7 @@ export type AdminSessionUser = {
   email: string | null;
   phone: string;
   role: ApiUserRole;
+  mustChangePassword?: boolean;
 };
 
 export type AdminNavItem = {

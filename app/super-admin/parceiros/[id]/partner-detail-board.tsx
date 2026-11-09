@@ -14,16 +14,18 @@ import {
   lookupCep,
 } from "@/lib/customer-profile";
 import { formatCurrency } from "@/lib/mock-data";
-import type { TenantLifecycleStatus } from "@/lib/tenant-types";
+import type { TenantLifecycleStatus, TenantVertical } from "@/lib/tenant-types";
 import {
   api,
   getErrorMessage,
   type ApiPartnerContract,
+  type ApiPlatformPlan,
   type ApiPlatformTenant,
 } from "@/services/api";
 import {
   ArrowLeft,
   FileText,
+  Mail,
   Printer,
   Save,
   ScrollText,
@@ -45,6 +47,20 @@ const CONTRACT_STYLE: Record<string, string> = {
   DRAFT: "text-zinc-400",
 };
 
+const PLAN_LABELS: Record<ApiPlatformPlan, string> = {
+  SOLO: "Solo (MEI / autônomo)",
+  ESSENCIAL: "Essencial",
+  CRESCIMENTO: "Crescimento",
+  REDE: "Rede",
+};
+
+const VERTICAL_OPTIONS: Array<{ id: TenantVertical; label: string }> = [
+  { id: "BARBER", label: "Barbearia" },
+  { id: "BEAUTY", label: "Beleza / salão" },
+  { id: "NAILS", label: "Unhas" },
+  { id: "CLINIC", label: "Estética / clínica" },
+];
+
 export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
   const [tenant, setTenant] = useState<ApiPlatformTenant | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,12 +68,22 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [invitePassword, setInvitePassword] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [document, setDocument] = useState("");
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [platformFee, setPlatformFee] = useState("");
+  const [platformPlan, setPlatformPlan] = useState<ApiPlatformPlan>("ESSENCIAL");
   const [businessType, setBusinessType] = useState<BusinessType>("BARBER_SHOP");
+  const [enabledVerticals, setEnabledVerticals] = useState<TenantVertical[]>([
+    "BARBER",
+  ]);
+  const [features, setFeatures] = useState({
+    membershipClub: true,
+    inventory: true,
+    financial: true,
+  });
   const [status, setStatus] = useState<TenantLifecycleStatus>("PENDING");
   const [zipCode, setZipCode] = useState("");
   const [street, setStreet] = useState("");
@@ -72,33 +98,48 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
   const [cepHint, setCepHint] = useState<string | null>(null);
   const [lastLookedCep, setLastLookedCep] = useState("");
 
+  const applyTenant = useCallback((response: ApiPlatformTenant) => {
+    setTenant(response);
+    setName(response.name);
+    setDocument(response.document);
+    setWhatsappNumber(response.whatsappNumber);
+    setPlatformFee(String(response.platformFee));
+    setPlatformPlan(response.platformPlan ?? "ESSENCIAL");
+    setBusinessType(response.businessType);
+    setEnabledVerticals(
+      response.enabledVerticals?.length
+        ? response.enabledVerticals
+        : [response.vertical],
+    );
+    setFeatures({
+      membershipClub: response.features?.membershipClub ?? true,
+      inventory: response.features?.inventory ?? true,
+      financial: response.features?.financial ?? true,
+    });
+    setStatus(response.status);
+    setZipCode(formatCep(response.zipCode ?? ""));
+    setStreet(response.street ?? "");
+    setNumber(response.number ?? "");
+    setNeighborhood(response.neighborhood ?? "");
+    setCity(response.city ?? "");
+    setState(response.state ?? "");
+    setOwnerName(response.owner?.name ?? "");
+    setOwnerEmail(response.owner?.email ?? "");
+    setOwnerPhone(response.owner?.phone ?? "");
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const response = await api.getSuperAdminTenant(partnerId);
-      setTenant(response);
-      setName(response.name);
-      setDocument(response.document);
-      setWhatsappNumber(response.whatsappNumber);
-      setPlatformFee(String(response.platformFee));
-      setBusinessType(response.businessType);
-      setStatus(response.status);
-      setZipCode(formatCep(response.zipCode ?? ""));
-      setStreet(response.street ?? "");
-      setNumber(response.number ?? "");
-      setNeighborhood(response.neighborhood ?? "");
-      setCity(response.city ?? "");
-      setState(response.state ?? "");
-      setOwnerName(response.owner?.name ?? "");
-      setOwnerEmail(response.owner?.email ?? "");
-      setOwnerPhone(response.owner?.phone ?? "");
+      applyTenant(response);
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {
       setLoading(false);
     }
-  }, [partnerId]);
+  }, [applyTenant, partnerId]);
 
   useEffect(() => {
     void load();
@@ -142,7 +183,10 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
         document,
         whatsappNumber,
         platformFee: Number(platformFee),
+        platformPlan,
         businessType,
+        enabledVerticals,
+        features,
         status,
         zipCode: digitsOnly(zipCode),
         street,
@@ -154,8 +198,27 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
         ownerEmail,
         ownerPhone,
       });
-      setTenant(updated);
-      setNotice("Cadastro salvo.");
+      applyTenant(updated);
+      setNotice("Ficha salva.");
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function inviteOwner() {
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    setInvitePassword(null);
+    try {
+      const result = await api.inviteSuperAdminTenant(partnerId);
+      setNotice(result.message);
+      if (result.temporaryPassword) {
+        setInvitePassword(result.temporaryPassword);
+      }
+      await load();
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {
@@ -206,10 +269,22 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
     }
   }
 
+  function toggleVertical(vertical: TenantVertical) {
+    setEnabledVerticals((current) => {
+      if (current.includes(vertical)) {
+        if (current.length === 1) {
+          return current;
+        }
+        return current.filter((item) => item !== vertical);
+      }
+      return [...current, vertical];
+    });
+  }
+
   if (loading) {
     return (
       <div className="mx-auto max-w-5xl px-5 py-10">
-        <LoadingState message="Carregando ficha do cliente Clubby..." />
+        <LoadingState message="Carregando centro de controle..." />
       </div>
     );
   }
@@ -225,6 +300,8 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
       </div>
     );
   }
+
+  const score = tenant.completeness?.score ?? 0;
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
@@ -247,13 +324,25 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
             >
               {TENANT_STATUS_LABELS[tenant.status]}
             </span>
+            <span className="rounded-full bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-zinc-200">
+              {PLAN_LABELS[tenant.platformPlan ?? "ESSENCIAL"]}
+            </span>
           </div>
           <p className="mt-1 text-sm text-zinc-500">
-            /{tenant.slug} · {BUSINESS_TYPE_LABELS[tenant.businessType]}
+            /{tenant.slug} · Completude {score}%
             {tenant.city ? ` · ${tenant.city}/${tenant.state}` : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => void inviteOwner()}
+            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-zinc-700 px-4 text-sm font-semibold text-zinc-100 disabled:opacity-60"
+          >
+            <Mail className="size-4" />
+            Convidar / reenviar acesso
+          </button>
           <button
             type="button"
             disabled={saving}
@@ -268,35 +357,54 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
 
       {error ? <p className="mb-4 text-sm text-red-300">{error}</p> : null}
       {notice ? <p className="mb-4 text-sm text-emerald-300">{notice}</p> : null}
+      {invitePassword ? (
+        <p className="mb-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+          Senha temporária (copie agora):{" "}
+          <span className="font-mono font-semibold">{invitePassword}</span>
+        </p>
+      ) : null}
 
       <div className="mb-6 grid gap-3 sm:grid-cols-4">
         <Stat label="Mensalidade" value={formatCurrency(tenant.platformFee)} />
+        <Stat label="Completude" value={`${score}%`} />
         <Stat label="Usuários" value={String(tenant.counts?.users ?? 0)} />
-        <Stat label="Agendamentos" value={String(tenant.counts?.appointments ?? 0)} />
-        <Stat label="Clube" value={String(tenant.counts?.clubMembers ?? 0)} />
+        <Stat label="Serviços" value={String(tenant.counts?.services ?? 0)} />
       </div>
 
-      <form onSubmit={(event) => void handleSave(event)} className="space-y-6">
-        <Section title="Estabelecimento">
+      {tenant.completeness?.missing?.length ? (
+        <Section title="O que falta no cadastro">
+          <ul className="space-y-1 text-sm text-zinc-400">
+            {tenant.completeness.missing.map((item) => (
+              <li key={item}>• {item}</li>
+            ))}
+          </ul>
+        </Section>
+      ) : null}
+
+      <form onSubmit={(event) => void handleSave(event)} className="mt-6 space-y-6">
+        <Section title="Plano e mensalidade">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Nome" value={name} onChange={setName} />
-            <Field label="Documento" value={document} onChange={setDocument} />
-            <Field label="WhatsApp" value={whatsappNumber} onChange={setWhatsappNumber} />
-            <Field label="Mensalidade (R$)" value={platformFee} onChange={setPlatformFee} />
             <label className="text-xs text-zinc-400">
-              Tipo de negócio
+              Plano SaaS
               <select
-                value={businessType}
-                onChange={(event) => setBusinessType(event.target.value as BusinessType)}
+                value={platformPlan}
+                onChange={(event) =>
+                  setPlatformPlan(event.target.value as ApiPlatformPlan)
+                }
                 className="mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
               >
-                {BUSINESS_TYPES.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.label}
+                {(Object.keys(PLAN_LABELS) as ApiPlatformPlan[]).map((plan) => (
+                  <option key={plan} value={plan}>
+                    {PLAN_LABELS[plan]}
                   </option>
                 ))}
               </select>
             </label>
+            <Field
+              label="Mensalidade (R$)"
+              value={platformFee}
+              onChange={setPlatformFee}
+            />
             <label className="text-xs text-zinc-400">
               Status
               <select
@@ -313,20 +421,122 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
                 ))}
               </select>
             </label>
-            <Field label="Slug (vitrine)" value={tenant.slug} onChange={() => undefined} readOnly />
           </div>
         </Section>
 
-        <Section title="Responsável / acesso gestão">
+        <Section title="Estabelecimento">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Nome" value={name} onChange={setName} />
+            <Field label="Documento" value={document} onChange={setDocument} />
+            <Field
+              label="WhatsApp cadastrado"
+              value={whatsappNumber}
+              onChange={setWhatsappNumber}
+            />
+            <label className="text-xs text-zinc-400">
+              Tipo de negócio (âncora)
+              <select
+                value={businessType}
+                onChange={(event) =>
+                  setBusinessType(event.target.value as BusinessType)
+                }
+                className="mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
+              >
+                {BUSINESS_TYPES.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Field
+              label="Slug (vitrine)"
+              value={tenant.slug}
+              onChange={() => undefined}
+              readOnly
+            />
+          </div>
+        </Section>
+
+        <Section title="Verticais ativas no mesmo estabelecimento">
           <p className="mb-3 text-xs text-zinc-500">
-            O responsável entra no painel com e-mail e senha. Em produção o MFA
-            vai para este e-mail. Google/Apple/Microsoft são da área do cliente
-            final do salão, não desta ficha.
+            Microempreendedor multi-serviço: ligue Unhas + Estética + Barbearia
+            no mesmo tenant.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {VERTICAL_OPTIONS.map((option) => {
+              const checked = enabledVerticals.includes(option.id);
+              return (
+                <label
+                  key={option.id}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 text-sm",
+                    checked
+                      ? "border-amber-400/40 bg-amber-400/10 text-amber-100"
+                      : "border-zinc-800 bg-zinc-950 text-zinc-300",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleVertical(option.id)}
+                    className="size-4 accent-amber-300"
+                  />
+                  {option.label}
+                </label>
+              );
+            })}
+          </div>
+        </Section>
+
+        <Section title="Módulos de produto">
+          <div className="grid gap-2 sm:grid-cols-3">
+            {(
+              [
+                ["membershipClub", "Clube / assinatura"],
+                ["inventory", "Estoque"],
+                ["financial", "Financeiro"],
+              ] as const
+            ).map(([key, label]) => (
+              <label
+                key={key}
+                className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200"
+              >
+                <input
+                  type="checkbox"
+                  checked={features[key]}
+                  onChange={(event) =>
+                    setFeatures((current) => ({
+                      ...current,
+                      [key]: event.target.checked,
+                    }))
+                  }
+                  className="size-4 accent-amber-300"
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </Section>
+
+        <Section title="Responsável / 1º acesso">
+          <p className="mb-3 text-xs text-zinc-500">
+            Convite envia e-mail com senha temporária e exige troca no primeiro
+            login. Status: {tenant.inviteStatus ?? "—"}.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Nome do responsável" value={ownerName} onChange={setOwnerName} />
-            <Field label="E-mail de acesso" value={ownerEmail} onChange={setOwnerEmail} type="email" />
-            <Field label="Telefone do responsável" value={ownerPhone} onChange={setOwnerPhone} />
+            <Field
+              label="E-mail de acesso"
+              value={ownerEmail}
+              onChange={setOwnerEmail}
+              type="email"
+            />
+            <Field
+              label="Telefone do responsável"
+              value={ownerPhone}
+              onChange={setOwnerPhone}
+            />
           </div>
         </Section>
 
@@ -354,7 +564,12 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
             </label>
             <Field label="Rua" value={street} onChange={setStreet} required={false} />
             <Field label="Número" value={number} onChange={setNumber} required={false} />
-            <Field label="Bairro" value={neighborhood} onChange={setNeighborhood} required={false} />
+            <Field
+              label="Bairro"
+              value={neighborhood}
+              onChange={setNeighborhood}
+              required={false}
+            />
             <Field label="Cidade" value={city} onChange={setCity} required={false} />
             <Field label="UF" value={state} onChange={setState} required={false} />
           </div>
@@ -372,62 +587,72 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
         </div>
       </form>
 
-      <Section title="Contratos">
-        <div className="space-y-2">
-          {(tenant.contracts ?? []).length === 0 ? (
-            <p className="text-sm text-zinc-500">
-              Nenhum contrato emitido. Use “Gerar contrato” para criar a minuta
-              com os dados atuais.
-            </p>
-          ) : (
-            tenant.contracts?.map((contract) => (
-              <div
-                key={contract.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3"
-              >
-                <div>
-                  <p className="text-sm font-medium text-zinc-100">{contract.title}</p>
-                  <p className="text-xs text-zinc-500">
-                    Versão {contract.version} ·{" "}
-                    <span className={CONTRACT_STYLE[contract.status] ?? "text-zinc-400"}>
-                      {contract.status}
-                    </span>
-                    {contract.acceptedAt
-                      ? ` · aceite em ${new Date(contract.acceptedAt).toLocaleDateString("pt-BR")}`
-                      : ""}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void openContract(contract)}
-                    className="inline-flex items-center gap-1 rounded-full border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-200"
-                  >
-                    <FileText className="size-3.5" />
-                    Ver
-                  </button>
-                  {contract.status === "ISSUED" ? (
+      <div className="mt-6">
+        <Section title="Contratos">
+          <div className="space-y-2">
+            {(tenant.contracts ?? []).length === 0 ? (
+              <p className="text-sm text-zinc-500">
+                Nenhum contrato emitido. Use “Gerar contrato” para criar a minuta
+                com os dados atuais.
+              </p>
+            ) : (
+              tenant.contracts?.map((contract) => (
+                <div
+                  key={contract.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-zinc-100">
+                      {contract.title}
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      Versão {contract.version} ·{" "}
+                      <span
+                        className={
+                          CONTRACT_STYLE[contract.status] ?? "text-zinc-400"
+                        }
+                      >
+                        {contract.status}
+                      </span>
+                      {contract.acceptedAt
+                        ? ` · aceite em ${new Date(contract.acceptedAt).toLocaleDateString("pt-BR")}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      disabled={saving}
-                      onClick={() => void acceptContract(contract.id)}
-                      className="rounded-full bg-emerald-400/15 px-3 py-1.5 text-xs font-semibold text-emerald-300 ring-1 ring-emerald-400/30 disabled:opacity-60"
+                      onClick={() => void openContract(contract)}
+                      className="inline-flex items-center gap-1 rounded-full border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-200"
                     >
-                      Registrar aceite
+                      <FileText className="size-3.5" />
+                      Ver
                     </button>
-                  ) : null}
+                    {contract.status === "ISSUED" ? (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => void acceptContract(contract.id)}
+                        className="rounded-full bg-emerald-400/15 px-3 py-1.5 text-xs font-semibold text-emerald-300 ring-1 ring-emerald-400/30 disabled:opacity-60"
+                      >
+                        Registrar aceite
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-            ))
-          )}
-        </div>
-      </Section>
+              ))
+            )}
+          </div>
+        </Section>
+      </div>
 
       {previewHtml ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
           <div className="flex h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-zinc-700 bg-zinc-950">
             <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
-              <p className="text-sm font-semibold text-zinc-100">Pré-visualização do contrato</p>
+              <p className="text-sm font-semibold text-zinc-100">
+                Pré-visualização do contrato
+              </p>
               <div className="flex gap-2">
                 <button
                   type="button"

@@ -279,10 +279,11 @@ export function SuperAdminBoard() {
             <thead className="text-[11px] uppercase tracking-wide text-zinc-500">
               <tr>
                 <th className="px-5 py-3 font-medium">Estabelecimento</th>
-                <th className="px-5 py-3 font-medium">Tipo</th>
+                <th className="px-5 py-3 font-medium">Plano</th>
+                <th className="px-5 py-3 font-medium">Verticais</th>
                 <th className="px-5 py-3 font-medium">Status</th>
+                <th className="px-5 py-3 font-medium">Completude</th>
                 <th className="px-5 py-3 font-medium">Assinatura</th>
-                <th className="px-5 py-3 font-medium">Operação</th>
                 <th className="px-5 py-3 font-medium" />
               </tr>
             </thead>
@@ -309,8 +310,14 @@ export function SuperAdminBoard() {
                       </p>
                     </button>
                   </td>
-                  <td className="px-5 py-4 text-xs">
-                    {BUSINESS_TYPE_LABELS[tenant.businessType]}
+                  <td className="px-5 py-4 text-xs text-zinc-200">
+                    {tenant.platformPlan ?? "ESSENCIAL"}
+                  </td>
+                  <td className="px-5 py-4 text-xs text-zinc-400">
+                    {(tenant.enabledVerticals?.length
+                      ? tenant.enabledVerticals
+                      : [tenant.vertical]
+                    ).join(" · ")}
                   </td>
                   <td className="px-5 py-4">
                     <span
@@ -322,13 +329,12 @@ export function SuperAdminBoard() {
                       {TENANT_STATUS_LABELS[tenant.status]}
                     </span>
                   </td>
+                  <td className="px-5 py-4 text-xs text-zinc-300">
+                    {tenant.completeness?.score ?? 0}%
+                  </td>
                   <td className="px-5 py-4 text-xs">
                     {formatCurrency(tenant.platformFee)}
                     {tenant.isHeadquarters ? "" : " · filial"}
-                  </td>
-                  <td className="px-5 py-4 text-xs text-zinc-500">
-                    {tenant.counts?.users ?? 0} usuários ·{" "}
-                    {tenant.counts?.appointments ?? 0} agendamentos
                   </td>
                   <td className="px-5 py-4 text-right">
                     {tenant.status === "PENDING" ? (
