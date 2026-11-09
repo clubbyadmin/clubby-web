@@ -1,14 +1,10 @@
 "use client";
 
 import {
-  BUSINESS_TYPE_LABELS,
   BUSINESS_TYPES,
-  TENANT_STATUS_LABELS,
-  type BusinessType,
 } from "@/lib/business-type";
 import { cn } from "@/lib/cn";
 import { formatCurrency } from "@/lib/mock-data";
-import type { TenantLifecycleStatus } from "@/lib/tenant-types";
 import {
   api,
   getErrorMessage,
@@ -16,37 +12,22 @@ import {
   type ApiPlatformTenant,
 } from "@/services/api";
 import {
+  ArrowRight,
   Building2,
   CircleDollarSign,
-  KeyRound,
-  MoreHorizontal,
-  Pencil,
-  Plus,
+  ClipboardList,
   Store,
   Users,
   Wallet,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-const STATUS_STYLE: Record<TenantLifecycleStatus, string> = {
-  PENDING: "bg-amber-400/10 text-amber-300 ring-amber-400/25",
-  ACTIVE: "bg-emerald-400/10 text-emerald-300 ring-emerald-400/25",
-  SUSPENDED: "bg-zinc-800 text-zinc-400 ring-zinc-700",
-  PAST_DUE: "bg-red-400/10 text-red-300 ring-red-400/25",
-};
-
 export function SuperAdminBoard() {
-  const router = useRouter();
   const [tenants, setTenants] = useState<ApiPlatformTenant[]>([]);
   const [metrics, setMetrics] = useState<ApiPlatformMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
-  const [menuId, setMenuId] = useState<string | null>(null);
-  const [resetTarget, setResetTarget] = useState<ApiPlatformTenant | null>(null);
-  const [resetResult, setResetResult] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -60,109 +41,50 @@ export function SuperAdminBoard() {
 
   useEffect(() => {
     let cancelled = false;
-
     setLoading(true);
     load()
       .catch((requestError: unknown) => {
-        if (!cancelled) {
-          setError(getErrorMessage(requestError));
-        }
+        if (!cancelled) setError(getErrorMessage(requestError));
       })
       .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       });
-
     return () => {
       cancelled = true;
     };
   }, [load]);
 
-  useEffect(() => {
-    if (!menuId) {
-      return;
-    }
-
-    const close = () => setMenuId(null);
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, [menuId]);
-
-  const pendingCount = tenants.filter((item) => item.status === "PENDING").length;
+  const pending = tenants.filter((item) => item.status === "PENDING");
+  const lowCompleteness = tenants
+    .filter((item) => (item.completeness?.score ?? 0) < 70)
+    .slice(0, 5);
   const maxBusinessType = useMemo(() => {
-    if (!metrics) {
-      return 1;
-    }
-
+    if (!metrics) return 1;
     return Math.max(1, ...Object.values(metrics.tenants.byBusinessType));
   }, [metrics]);
-
-  async function changeStatus(id: string, status: TenantLifecycleStatus) {
-    setBusyId(id);
-    setError(null);
-
-    try {
-      await api.updateSuperAdminTenantStatus(id, status);
-      await load();
-    } catch (requestError) {
-      setError(getErrorMessage(requestError));
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function approve(id: string) {
-    setBusyId(id);
-    setError(null);
-
-    try {
-      await api.createSuperAdminTenant({ tenantId: id });
-      await load();
-    } catch (requestError) {
-      setError(getErrorMessage(requestError));
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function resetPassword(tenant: ApiPlatformTenant, password?: string) {
-    setBusyId(tenant.id);
-    setError(null);
-
-    try {
-      const result = await api.resetSuperAdminTenantPassword(
-        tenant.id,
-        password,
-      );
-      setResetResult(result.temporaryPassword);
-      await load();
-    } catch (requestError) {
-      setError(getErrorMessage(requestError));
-    } finally {
-      setBusyId(null);
-    }
-  }
 
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
-            Visão macro
+            Visão geral
           </p>
           <h2 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-50">
-            Operação da plataforma
+            Plataforma Clubby
           </h2>
+          <p className="mt-1 max-w-xl text-sm text-zinc-500">
+            Acompanhe a rede e abra o centro de controle de cada parceiro.
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowCreate((open) => !open)}
-          className="inline-flex items-center gap-2 rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-zinc-950"
+        <Link
+          href="/super-admin/parceiros"
+          className="inline-flex items-center gap-2 rounded-full bg-amber-300 px-4 py-2.5 text-sm font-semibold text-zinc-950"
         >
-          <Plus className="size-4" strokeWidth={2.2} />
-          Aprovar parceiro
-        </button>
+          <Building2 className="size-4" />
+          Ir para Parceiros
+          <ArrowRight className="size-4" />
+        </Link>
       </div>
 
       {error ? (
@@ -191,23 +113,72 @@ export function SuperAdminBoard() {
         <Kpi
           label="Estabelecimentos"
           value={metrics ? String(metrics.tenants.total) : "—"}
-          hint={pendingCount > 0 ? `${pendingCount} aguardando aprovação` : "Rede Clubby"}
+          hint={
+            pending.length > 0
+              ? `${pending.length} aguardando aprovação`
+              : "Rede Clubby"
+          }
           icon={Store}
         />
         <Kpi
           label="Agenda 30 dias"
-          value={metrics ? String(metrics.operations.appointmentsLast30Days) : "—"}
+          value={
+            metrics ? String(metrics.operations.appointmentsLast30Days) : "—"
+          }
           hint={
             metrics
-              ? `${metrics.operations.completedAppointmentsLast30Days} concluídos${
-                  metrics.conversionRate != null
-                    ? ` · ${(metrics.conversionRate * 100).toFixed(1).replace(".", ",")}% conversão`
-                    : ""
-                }`
+              ? `${metrics.operations.completedAppointmentsLast30Days} concluídos`
               : "Volume da rede"
           }
           icon={Users}
         />
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        <Link
+          href="/super-admin/parceiros"
+          className="group rounded-3xl border border-amber-400/25 bg-gradient-to-br from-amber-400/10 to-transparent p-5 transition hover:border-amber-300/40"
+        >
+          <div className="flex items-center justify-between">
+            <Building2 className="size-5 text-amber-300" />
+            <ArrowRight className="size-4 text-amber-200/70 transition group-hover:translate-x-0.5" />
+          </div>
+          <h3 className="mt-4 text-lg font-semibold text-zinc-50">Parceiros</h3>
+          <p className="mt-1 text-sm text-zinc-400">
+            Ficha completa: plano, verticais, invite, contrato e completude.
+          </p>
+          <p className="mt-4 text-xs font-semibold text-amber-200">
+            {loading ? "…" : `${tenants.length} estabelecimentos`}
+          </p>
+        </Link>
+
+        <Link
+          href="/super-admin/whatsapp"
+          className="group rounded-3xl border border-zinc-800 bg-zinc-950/60 p-5 transition hover:border-zinc-700"
+        >
+          <div className="flex items-center justify-between">
+            <ClipboardList className="size-5 text-zinc-300" />
+            <ArrowRight className="size-4 text-zinc-500 transition group-hover:translate-x-0.5" />
+          </div>
+          <h3 className="mt-4 text-lg font-semibold text-zinc-50">WhatsApp</h3>
+          <p className="mt-1 text-sm text-zinc-400">
+            Saúde da conexão do bot em cada estabelecimento.
+          </p>
+        </Link>
+
+        <Link
+          href="/super-admin/financeiro"
+          className="group rounded-3xl border border-zinc-800 bg-zinc-950/60 p-5 transition hover:border-zinc-700"
+        >
+          <div className="flex items-center justify-between">
+            <Wallet className="size-5 text-zinc-300" />
+            <ArrowRight className="size-4 text-zinc-500 transition group-hover:translate-x-0.5" />
+          </div>
+          <h3 className="mt-4 text-lg font-semibold text-zinc-50">Financeiro</h3>
+          <p className="mt-1 text-sm text-zinc-400">
+            Volume da rede, MRR e auditoria dos parceiros.
+          </p>
+        </Link>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
@@ -219,7 +190,6 @@ export function SuperAdminBoard() {
             {BUSINESS_TYPES.map((item) => {
               const count = metrics?.tenants.byBusinessType[item.id] ?? 0;
               const width = `${(count / maxBusinessType) * 100}%`;
-
               return (
                 <div key={item.id}>
                   <div className="mb-1 flex items-center justify-between text-xs">
@@ -239,209 +209,56 @@ export function SuperAdminBoard() {
         </div>
 
         <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/60 p-5">
-          <h3 className="text-sm font-semibold text-zinc-200">Status da rede</h3>
-          <dl className="mt-5 space-y-4 text-sm">
-            <StatusRow label="Ativos" value={metrics?.tenants.ACTIVE ?? 0} tone="text-emerald-300" />
-            <StatusRow label="Pendentes" value={metrics?.tenants.PENDING ?? 0} tone="text-amber-300" />
-            <StatusRow label="Suspensos" value={metrics?.tenants.SUSPENDED ?? 0} tone="text-zinc-400" />
-            <StatusRow label="Inadimplentes" value={metrics?.tenants.PAST_DUE ?? 0} tone="text-red-300" />
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-zinc-200">Atenção</h3>
+            <Link
+              href="/super-admin/parceiros"
+              className="text-xs font-semibold text-amber-300 hover:text-amber-200"
+            >
+              Ver todos
+            </Link>
+          </div>
+          <dl className="mt-5 space-y-3 text-sm">
             <StatusRow
-              label="Equipe na rede"
-              value={metrics?.operations.staffCount ?? 0}
-              tone="text-zinc-200"
+              label="Pendentes de aprovação"
+              value={pending.length}
+              tone="text-amber-300"
+            />
+            <StatusRow
+              label="Ativos"
+              value={metrics?.tenants.ACTIVE ?? 0}
+              tone="text-emerald-300"
+            />
+            <StatusRow
+              label="Inadimplentes"
+              value={metrics?.tenants.PAST_DUE ?? 0}
+              tone="text-red-300"
             />
           </dl>
-        </div>
-      </section>
-
-      {showCreate ? (
-        <CreatePartnerForm
-          onCancel={() => setShowCreate(false)}
-          onCreated={async () => {
-            setShowCreate(false);
-            await load();
-          }}
-        />
-      ) : null}
-
-      <section className="overflow-hidden rounded-3xl border border-zinc-800/80 bg-zinc-950/60">
-        <div className="flex items-center justify-between border-b border-zinc-800/80 px-5 py-4">
-          <div className="flex items-center gap-2">
-            <Building2 className="size-4 text-amber-300" strokeWidth={2} />
-            <h3 className="text-sm font-semibold text-zinc-100">Clientes Clubby</h3>
-          </div>
-          <p className="text-xs text-zinc-500">
-            {loading ? "Carregando..." : `${tenants.length} estabelecimentos`}
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="text-[11px] uppercase tracking-wide text-zinc-500">
-              <tr>
-                <th className="px-5 py-3 font-medium">Estabelecimento</th>
-                <th className="px-5 py-3 font-medium">Plano</th>
-                <th className="px-5 py-3 font-medium">Verticais</th>
-                <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium">Completude</th>
-                <th className="px-5 py-3 font-medium">Assinatura</th>
-                <th className="px-5 py-3 font-medium" />
-              </tr>
-            </thead>
-            <tbody>
-              {tenants.map((tenant) => (
-                <tr
-                  key={tenant.id}
-                  className="border-t border-zinc-800/70 text-zinc-300"
-                >
-                  <td className="px-5 py-4">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        router.push(`/super-admin/parceiros/${tenant.id}`)
-                      }
-                      className="text-left"
+          {lowCompleteness.length > 0 ? (
+            <div className="mt-5 border-t border-zinc-800 pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Completude baixa
+              </p>
+              <ul className="mt-3 space-y-2">
+                {lowCompleteness.map((tenant) => (
+                  <li key={tenant.id}>
+                    <Link
+                      href={`/super-admin/parceiros/${tenant.id}`}
+                      className="flex items-center justify-between rounded-xl px-2 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900 hover:text-zinc-50"
                     >
-                      <p className="font-medium text-zinc-100 hover:text-amber-200">
-                        {tenant.name}
-                      </p>
-                      <p className="text-xs text-zinc-500">
-                        /{tenant.slug}
-                        {tenant.city ? ` · ${tenant.city}` : ""}
-                      </p>
-                    </button>
-                  </td>
-                  <td className="px-5 py-4 text-xs text-zinc-200">
-                    {tenant.platformPlan ?? "ESSENCIAL"}
-                  </td>
-                  <td className="px-5 py-4 text-xs text-zinc-400">
-                    {(tenant.enabledVerticals?.length
-                      ? tenant.enabledVerticals
-                      : [tenant.vertical]
-                    ).join(" · ")}
-                  </td>
-                  <td className="px-5 py-4">
-                    <span
-                      className={cn(
-                        "inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
-                        STATUS_STYLE[tenant.status],
-                      )}
-                    >
-                      {TENANT_STATUS_LABELS[tenant.status]}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-xs text-zinc-300">
-                    {tenant.completeness?.score ?? 0}%
-                  </td>
-                  <td className="px-5 py-4 text-xs">
-                    {formatCurrency(tenant.platformFee)}
-                    {tenant.isHeadquarters ? "" : " · filial"}
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    {tenant.status === "PENDING" ? (
-                      <button
-                        type="button"
-                        disabled={busyId === tenant.id}
-                        onClick={() => void approve(tenant.id)}
-                        className="rounded-full bg-amber-300 px-3 py-1.5 text-xs font-semibold text-zinc-950 disabled:opacity-60"
-                      >
-                        Aprovar
-                      </button>
-                    ) : (
-                      <div className="relative inline-flex justify-end">
-                        <button
-                          type="button"
-                          disabled={busyId === tenant.id}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setMenuId((current) =>
-                              current === tenant.id ? null : tenant.id,
-                            );
-                          }}
-                          className="inline-flex items-center gap-1 rounded-full border border-zinc-700 px-2.5 py-1.5 text-xs font-medium text-zinc-300 hover:text-zinc-100 disabled:opacity-60"
-                        >
-                          Ações
-                          <MoreHorizontal className="size-3.5" />
-                        </button>
-                        {menuId === tenant.id ? (
-                          <div
-                            onClick={(event) => event.stopPropagation()}
-                            className="absolute right-0 z-20 mt-2 w-52 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 py-1 shadow-xl shadow-black/40"
-                          >
-                            <ActionItem
-                              icon={Pencil}
-                              label="Abrir ficha do cliente"
-                              onClick={() => {
-                                setMenuId(null);
-                                router.push(`/super-admin/parceiros/${tenant.id}`);
-                              }}
-                            />
-                            <ActionItem
-                              icon={KeyRound}
-                              label="Resetar senha do gestor"
-                              onClick={() => {
-                                setMenuId(null);
-                                setResetResult(null);
-                                setResetTarget(tenant);
-                              }}
-                            />
-                            {tenant.status !== "SUSPENDED" ? (
-                              <ActionItem
-                                label="Suspender acesso"
-                                onClick={() => {
-                                  setMenuId(null);
-                                  void changeStatus(tenant.id, "SUSPENDED");
-                                }}
-                              />
-                            ) : null}
-                            {tenant.status !== "PAST_DUE" ? (
-                              <ActionItem
-                                label="Marcar inadimplente"
-                                tone="text-red-300"
-                                onClick={() => {
-                                  setMenuId(null);
-                                  void changeStatus(tenant.id, "PAST_DUE");
-                                }}
-                              />
-                            ) : null}
-                            {tenant.status !== "ACTIVE" ? (
-                              <ActionItem
-                                label="Reativar"
-                                tone="text-emerald-300"
-                                onClick={() => {
-                                  setMenuId(null);
-                                  void changeStatus(tenant.id, "ACTIVE");
-                                }}
-                              />
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!loading && tenants.length === 0 ? (
-            <p className="px-5 py-8 text-center text-sm text-zinc-500">
-              Nenhum estabelecimento cadastrado.
-            </p>
+                      <span>{tenant.name}</span>
+                      <span className="text-xs text-zinc-500">
+                        {tenant.completeness?.score ?? 0}%
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
         </div>
       </section>
-
-      {resetTarget ? (
-        <ResetPasswordModal
-          tenant={resetTarget}
-          busy={busyId === resetTarget.id}
-          generatedPassword={resetResult}
-          onClose={() => {
-            setResetTarget(null);
-            setResetResult(null);
-          }}
-          onConfirm={(password) => void resetPassword(resetTarget, password)}
-        />
-      ) : null}
     </div>
   );
 }
@@ -486,244 +303,6 @@ function StatusRow({
     <div className="flex items-center justify-between">
       <dt className="text-zinc-500">{label}</dt>
       <dd className={cn("font-semibold", tone)}>{value}</dd>
-    </div>
-  );
-}
-
-function CreatePartnerForm({
-  onCancel,
-  onCreated,
-}: {
-  onCancel: () => void;
-  onCreated: () => Promise<void>;
-}) {
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [businessType, setBusinessType] = useState<BusinessType>("BARBER_SHOP");
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [document, setDocument] = useState("");
-  const [whatsappNumber, setWhatsappNumber] = useState("");
-  const [ownerName, setOwnerName] = useState("");
-  const [ownerEmail, setOwnerEmail] = useState("");
-  const [ownerPhone, setOwnerPhone] = useState("");
-  const [ownerPassword, setOwnerPassword] = useState("clubby-admin");
-  const [platformFee, setPlatformFee] = useState("197");
-
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSubmitting(true);
-    setError(null);
-
-    try {
-      await api.createSuperAdminTenant({
-        name,
-        slug,
-        document,
-        whatsappNumber,
-        businessType,
-        ownerName,
-        ownerEmail,
-        ownerPhone,
-        ownerPassword,
-        platformFee: Number(platformFee),
-      });
-      await onCreated();
-    } catch (requestError) {
-      setError(getErrorMessage(requestError));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <form
-      onSubmit={(event) => void handleSubmit(event)}
-      className="rounded-3xl border border-amber-400/20 bg-amber-400/5 p-5"
-    >
-      <h3 className="text-sm font-semibold text-zinc-100">
-        Novo parceiro (já aprovado)
-      </h3>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <label className="text-xs text-zinc-400">
-          Tipo
-          <select
-            value={businessType}
-            onChange={(event) =>
-              setBusinessType(event.target.value as BusinessType)
-            }
-            className="mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-          >
-            {BUSINESS_TYPES.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <TextField label="Nome" value={name} onChange={setName} />
-        <TextField label="Slug" value={slug} onChange={setSlug} />
-        <TextField label="Documento" value={document} onChange={setDocument} />
-        <TextField
-          label="WhatsApp"
-          value={whatsappNumber}
-          onChange={setWhatsappNumber}
-        />
-        <TextField
-          label="Mensalidade (R$)"
-          value={platformFee}
-          onChange={setPlatformFee}
-        />
-        <TextField label="Responsável" value={ownerName} onChange={setOwnerName} />
-        <TextField
-          label="E-mail"
-          type="email"
-          value={ownerEmail}
-          onChange={setOwnerEmail}
-        />
-        <TextField label="Telefone" value={ownerPhone} onChange={setOwnerPhone} />
-        <TextField
-          label="Senha inicial"
-          type="password"
-          value={ownerPassword}
-          onChange={setOwnerPassword}
-        />
-      </div>
-      {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
-      <div className="mt-4 flex gap-2">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
-        >
-          {submitting ? "Salvando..." : "Criar e ativar"}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-full px-4 py-2 text-sm text-zinc-400"
-        >
-          Cancelar
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function TextField({
-  label,
-  value,
-  onChange,
-  type = "text",
-  required = true,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-  required?: boolean;
-}) {
-  return (
-    <label className="text-xs text-zinc-400">
-      {label}
-      <input
-        type={type}
-        required={required}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
-      />
-    </label>
-  );
-}
-
-function ActionItem({
-  label,
-  onClick,
-  icon: Icon,
-  tone,
-}: {
-  label: string;
-  onClick: () => void;
-  icon?: typeof Pencil;
-  tone?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-zinc-300 hover:bg-zinc-900",
-        tone,
-      )}
-    >
-      {Icon ? <Icon className="size-3.5" /> : null}
-      {label}
-    </button>
-  );
-}
-
-function ResetPasswordModal({
-  tenant,
-  busy,
-  generatedPassword,
-  onClose,
-  onConfirm,
-}: {
-  tenant: ApiPlatformTenant;
-  busy: boolean;
-  generatedPassword: string | null;
-  onClose: () => void;
-  onConfirm: (password?: string) => void;
-}) {
-  const [password, setPassword] = useState("");
-
-  return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4">
-      <div className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
-        <h3 className="text-lg font-semibold text-zinc-50">Resetar senha</h3>
-        <p className="mt-2 text-sm text-zinc-500">
-          Gestor de {tenant.name}
-          {tenant.owner?.email ? ` · ${tenant.owner.email}` : ""}. A senha atual
-          deixa de funcionar imediatamente.
-        </p>
-        {generatedPassword ? (
-          <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3">
-            <p className="text-[11px] uppercase tracking-wide text-amber-200/80">
-              Senha temporária
-            </p>
-            <p className="mt-1 font-mono text-lg text-amber-100">{generatedPassword}</p>
-            <p className="mt-2 text-xs text-zinc-400">
-              Copie agora. Ela não será exibida de novo.
-            </p>
-          </div>
-        ) : (
-          <label className="mt-4 block text-xs text-zinc-400">
-            Senha (opcional — geramos uma se ficar em branco)
-            <input
-              type="text"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100"
-            />
-          </label>
-        )}
-        <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-full px-4 py-2 text-sm text-zinc-400">
-            {generatedPassword ? "Fechar" : "Cancelar"}
-          </button>
-          {!generatedPassword ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onConfirm(password.trim() || undefined)}
-              className="rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
-            >
-              {busy ? "Redefinindo..." : "Resetar senha"}
-            </button>
-          ) : null}
-        </div>
-      </div>
     </div>
   );
 }
