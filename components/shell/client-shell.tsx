@@ -75,8 +75,8 @@ export function ClientShell({
                 <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-50">
                   {tenant.name}
                 </h1>
-                <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-                  Para usar o salão, entre com seu e-mail ou crie a conta. O celular é obrigatório e localiza o cadastro feito pelo WhatsApp.
+                <p className="mt-3 max-w-sm text-sm leading-relaxed text-zinc-400">
+                  Entre para agendar e ver sua área. Depois confirmamos o celular para achar o cadastro do WhatsApp.
                 </p>
               </header>
               <CustomerEntry />
