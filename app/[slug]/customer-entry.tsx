@@ -108,7 +108,7 @@ export function CustomerEntry() {
         </div>
       ) : (
         <p className="mt-1 text-sm text-zinc-300">
-          Entre com e-mail, Gmail, Apple ou Microsoft. O celular confirma o cadastro.
+          Entre com o e-mail ou crie a conta. O celular é obrigatório e encontra o cadastro feito no WhatsApp.
         </p>
       )}
 
@@ -206,7 +206,7 @@ export function CustomerEntry() {
           }}
         >
           <p className="text-xs text-zinc-400">
-            O celular é obrigatório para fechar a verificação.
+            Informe o mesmo celular do WhatsApp. Se você já marcou por lá, essa é a sua ficha.
           </p>
           <input
             type="tel"

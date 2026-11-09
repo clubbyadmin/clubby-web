@@ -5,6 +5,7 @@ import { useAdminSession } from "@/contexts/admin-session-context";
 import { useTenant } from "@/contexts/tenant-context";
 import { demoStaffLogins, LOCAL_ADMIN_USER } from "@/lib/admin-rbac";
 import { readStoredAdminUser } from "@/lib/admin-session-storage";
+import { isDemoMode } from "@/lib/app-mode";
 import { api, getAccessToken } from "@/services/api";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
@@ -17,6 +18,7 @@ export function AdminSessionGate({ children }: AdminSessionGateProps) {
   const { tenant, loading: tenantLoading } = useTenant();
   const { user, setSession } = useAdminSession();
   const [authFailed, setAuthFailed] = useState(false);
+  const demo = isDemoMode();
 
   useEffect(() => {
     if (user) {
@@ -33,13 +35,18 @@ export function AdminSessionGate({ children }: AdminSessionGateProps) {
       storedToken &&
       storedUser &&
       storedUser.role !== "CUSTOMER" &&
-      storedUser.tenantId === tenant.id;
+      (storedUser.role === "SUPER_ADMIN" || storedUser.tenantId === tenant.id);
 
     if (sameTenantStaff) {
       setSession({
         accessToken: storedToken,
         user: storedUser,
       });
+      return;
+    }
+
+    if (!demo) {
+      setAuthFailed(true);
       return;
     }
 
@@ -52,21 +59,21 @@ export function AdminSessionGate({ children }: AdminSessionGateProps) {
     }
 
     let cancelled = false;
-    const phone =
-      demoStaffLogins(tenant.slug)[0]?.phone ??
-      process.env.NEXT_PUBLIC_DEMO_ADMIN_PHONE ??
-      "5511900000001";
+    const staff = demoStaffLogins(tenant.slug)[0];
     const password =
       process.env.NEXT_PUBLIC_DEMO_ADMIN_PASSWORD ?? "clubby-admin";
 
     api
       .login({
         tenantId: tenant.id,
-        phone,
+        email: staff?.email ?? "gestor@studiobarbearia.com",
         password,
       })
       .then((session) => {
-        if (cancelled) {
+        if (cancelled || !("accessToken" in session)) {
+          if (!cancelled) {
+            setAuthFailed(true);
+          }
           return;
         }
 
@@ -84,7 +91,7 @@ export function AdminSessionGate({ children }: AdminSessionGateProps) {
     return () => {
       cancelled = true;
     };
-  }, [setSession, tenant.id, tenantLoading, user]);
+  }, [demo, setSession, tenant.id, tenant.slug, tenantLoading, user]);
 
   if (!user && !authFailed) {
     return <LoadingState message="Autenticando painel..." />;
@@ -93,9 +100,9 @@ export function AdminSessionGate({ children }: AdminSessionGateProps) {
   if (!user && authFailed) {
     return (
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 py-16 text-center">
-        <p className="text-lg font-semibold text-zinc-100">A gestão não entrou.</p>
+        <p className="text-lg font-semibold text-zinc-100">Entre para abrir a gestão.</p>
         <p className="mt-2 text-sm text-zinc-400">
-          O acesso automático deste estabelecimento falhou. Entre com o e-mail da equipe.
+          Use o e-mail da equipe. No primeiro acesso o Clubby pede um código no e-mail.
         </p>
         <Link
           href="/login"

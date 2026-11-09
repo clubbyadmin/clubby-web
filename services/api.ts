@@ -1251,9 +1251,41 @@ export const api = {
     phone?: string;
     email?: string;
     password: string;
+    deviceToken?: string | null;
+  }) {
+    return request<
+      | {
+          accessToken: string;
+          deviceToken?: string | null;
+          user: {
+            id: string;
+            tenantId: string;
+            name: string;
+            email: string | null;
+            phone: string;
+            role: ApiUserRole;
+          };
+        }
+      | {
+          mfaRequired: true;
+          challengeId: string;
+          emailHint: string;
+          previewCode: string | null;
+        }
+    >("/auth/login", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  verifyStaffMfa(payload: {
+    challengeId: string;
+    code: string;
+    trustDevice?: boolean;
   }) {
     return request<{
       accessToken: string;
+      deviceToken?: string | null;
       user: {
         id: string;
         tenantId: string;
@@ -1262,7 +1294,7 @@ export const api = {
         phone: string;
         role: ApiUserRole;
       };
-    }>("/auth/login", {
+    }>("/auth/mfa/verify", {
       method: "POST",
       body: payload,
     });

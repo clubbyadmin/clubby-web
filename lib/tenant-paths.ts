@@ -7,6 +7,7 @@ export const RESERVED_TENANT_SLUGS = new Set([
   "login",
   "super-admin",
   "clubby",
+  "clubby-platform",
   "serwist",
   "icons",
   "manifest.json",

@@ -206,16 +206,47 @@ export const DEMO_STAFF_LOGINS: Array<{
   role: Extract<ApiUserRole, "ADMIN" | "RECEPTIONIST" | "PROFESSIONAL">;
   label: string;
   phone: string;
+  email: string;
 }> = [
-  { role: "ADMIN", label: "Gestor", phone: "5511900000001" },
-  { role: "RECEPTIONIST", label: "Recepção", phone: "5511900000002" },
-  { role: "PROFESSIONAL", label: "Profissional", phone: "5511910000001" },
+  {
+    role: "ADMIN",
+    label: "Gestor",
+    phone: "5511900000001",
+    email: "gestor@studiobarbearia.com",
+  },
+  {
+    role: "RECEPTIONIST",
+    label: "Recepção",
+    phone: "5511900000002",
+    email: "recepcao@studiobarbearia.com",
+  },
+  {
+    role: "PROFESSIONAL",
+    label: "Profissional",
+    phone: "5511910000001",
+    email: "carlos@studiobarbearia.com",
+  },
 ];
 
 const DEMO_BARBER_STAFF_LOGINS: typeof DEMO_STAFF_LOGINS = [
-  { role: "ADMIN", label: "Gestor", phone: "5511988000001" },
-  { role: "RECEPTIONIST", label: "Recepção", phone: "5511988000002" },
-  { role: "PROFESSIONAL", label: "Profissional", phone: "5511988000003" },
+  {
+    role: "ADMIN",
+    label: "Gestor",
+    phone: "5511988000001",
+    email: "admin@demo-barber.clubby",
+  },
+  {
+    role: "RECEPTIONIST",
+    label: "Recepção",
+    phone: "5511988000002",
+    email: "recepcao@demo-barber.clubby",
+  },
+  {
+    role: "PROFESSIONAL",
+    label: "Profissional",
+    phone: "5511988000003",
+    email: "diego@demo-barber.clubby",
+  },
 ];
 
 export function demoStaffLogins(slug: string | null | undefined) {

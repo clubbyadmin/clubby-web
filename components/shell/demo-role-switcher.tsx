@@ -31,7 +31,7 @@ export function DemoRoleSwitcher({
     return null;
   }
 
-  async function switchTo(phone: string, role: string) {
+  async function switchTo(email: string, role: string) {
     setPendingRole(role);
     setError(null);
 
@@ -41,9 +41,14 @@ export function DemoRoleSwitcher({
     try {
       const session = await api.login({
         tenantId: tenant.id,
-        phone,
+        email,
         password,
       });
+
+      if (!("accessToken" in session)) {
+        setError("A demonstração pediu verificação extra. Use /login.");
+        return;
+      }
 
       setSession({
         accessToken: session.accessToken,
@@ -76,7 +81,7 @@ export function DemoRoleSwitcher({
               key={item.role}
               type="button"
               disabled={pendingRole !== null}
-              onClick={() => void switchTo(item.phone, item.role)}
+              onClick={() => void switchTo(item.email, item.role)}
               className={cn(
                 "rounded-xl px-3 py-2 text-xs font-semibold transition disabled:opacity-60",
                 compact ? "text-center" : "text-left",

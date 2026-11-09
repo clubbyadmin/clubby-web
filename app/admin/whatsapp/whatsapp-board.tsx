@@ -5,6 +5,7 @@ import { ErrorState, LoadingState } from "@/components/api-state";
 import { AccentIconWrap } from "@/components/shell/accent-ui";
 import { TenantBadge } from "@/components/tenant-brand";
 import { useTenant } from "@/contexts/tenant-context";
+import { isDemoMode } from "@/lib/app-mode";
 import { cn } from "@/lib/cn";
 import {
   api,
@@ -242,7 +243,7 @@ export function WhatsappBoard() {
             />
           </section>
 
-          <ConversationTester />
+          {isDemoMode() ? <ConversationTester /> : null}
 
           <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
             <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-5">

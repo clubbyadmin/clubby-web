@@ -7,6 +7,11 @@ import {
   type BusinessType,
 } from "@/lib/business-type";
 import { cn } from "@/lib/cn";
+import {
+  digitsOnly,
+  formatCep,
+  lookupCep,
+} from "@/lib/customer-profile";
 import { formatCurrency } from "@/lib/mock-data";
 import type { TenantLifecycleStatus } from "@/lib/tenant-types";
 import {
@@ -26,7 +31,7 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type InputHTMLAttributes } from "react";
 
 const STATUS_STYLE: Record<TenantLifecycleStatus, string> = {
   PENDING: "bg-amber-400/10 text-amber-300 ring-amber-400/25",
@@ -620,12 +625,18 @@ function TextField({
   onChange,
   type = "text",
   required = true,
+  hint,
+  onBlur,
+  inputMode,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
   required?: boolean;
+  hint?: string | null;
+  onBlur?: () => void;
+  inputMode?: InputHTMLAttributes<HTMLInputElement>["inputMode"];
 }) {
   return (
     <label className="text-xs text-zinc-400">
@@ -634,9 +645,12 @@ function TextField({
         type={type}
         required={required}
         value={value}
+        inputMode={inputMode}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
         className="mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
       />
+      {hint ? <span className="mt-1 block text-[11px] text-zinc-500">{hint}</span> : null}
     </label>
   );
 }
@@ -693,12 +707,44 @@ function EditPartnerModal({
   const [document, setDocument] = useState(tenant.document);
   const [whatsappNumber, setWhatsappNumber] = useState(tenant.whatsappNumber);
   const [platformFee, setPlatformFee] = useState(String(tenant.platformFee));
-  const [zipCode, setZipCode] = useState(tenant.zipCode ?? "");
+  const [zipCode, setZipCode] = useState(formatCep(tenant.zipCode ?? ""));
   const [street, setStreet] = useState(tenant.street ?? "");
   const [number, setNumber] = useState(tenant.number ?? "");
   const [neighborhood, setNeighborhood] = useState(tenant.neighborhood ?? "");
   const [city, setCity] = useState(tenant.city ?? "");
   const [state, setState] = useState(tenant.state ?? "");
+  const [lookingCep, setLookingCep] = useState(false);
+  const [cepHint, setCepHint] = useState<string | null>(null);
+  const [lastLookedCep, setLastLookedCep] = useState("");
+
+  async function fillAddressFromCep(raw: string) {
+    const digits = digitsOnly(raw);
+    if (digits.length !== 8 || digits === lastLookedCep) {
+      return;
+    }
+
+    setLookingCep(true);
+    setCepHint("Buscando endereço...");
+    try {
+      const address = await lookupCep(digits);
+      setLastLookedCep(digits);
+
+      if (!address) {
+        setCepHint("CEP não encontrado. Preencha o endereço manualmente.");
+        return;
+      }
+
+      setStreet(address.street);
+      setNeighborhood(address.neighborhood);
+      setCity(address.city);
+      setState(address.state);
+      setCepHint("Endereço preenchido pelo CEP.");
+    } catch {
+      setCepHint("Não foi possível consultar o CEP agora.");
+    } finally {
+      setLookingCep(false);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4">
@@ -710,7 +756,7 @@ function EditPartnerModal({
             document,
             whatsappNumber,
             platformFee: Number(platformFee),
-            zipCode,
+            zipCode: digitsOnly(zipCode),
             street,
             number,
             neighborhood,
@@ -746,7 +792,22 @@ function EditPartnerModal({
             value={platformFee}
             onChange={setPlatformFee}
           />
-          <TextField label="CEP" value={zipCode} onChange={setZipCode} required={false} />
+          <TextField
+            label="CEP"
+            value={zipCode}
+            required={false}
+            inputMode="numeric"
+            hint={lookingCep ? "Buscando endereço..." : cepHint}
+            onChange={(value) => {
+              const next = formatCep(value);
+              setZipCode(next);
+              setCepHint(null);
+              if (digitsOnly(next).length === 8) {
+                void fillAddressFromCep(next);
+              }
+            }}
+            onBlur={() => void fillAddressFromCep(zipCode)}
+          />
           <TextField label="Rua" value={street} onChange={setStreet} required={false} />
           <TextField label="Número" value={number} onChange={setNumber} required={false} />
           <TextField

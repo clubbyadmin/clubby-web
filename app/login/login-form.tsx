@@ -11,6 +11,36 @@ import { ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+const DEVICE_TOKEN_KEY = "clubby.admin.deviceToken";
+
+function readDeviceToken() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return localStorage.getItem(DEVICE_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeDeviceToken(token: string | null | undefined) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (token) {
+      localStorage.setItem(DEVICE_TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(DEVICE_TOKEN_KEY);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 export function LoginPage() {
   return (
     <AdminSessionProvider>
@@ -24,6 +54,10 @@ function LoginForm() {
   const { user, setSession } = useAdminSession();
   const [email, setEmail] = useState(PLATFORM_SUPER_ADMIN_EMAIL);
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [emailHint, setEmailHint] = useState<string | null>(null);
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -36,7 +70,7 @@ function LoginForm() {
     const storedUser = readStoredAdminUser();
     const storedToken = getAccessToken();
 
-    if (storedToken && storedUser) {
+    if (storedToken && storedUser && storedUser.role !== "CUSTOMER") {
       setSession({
         accessToken: storedToken,
         user: storedUser,
@@ -44,22 +78,59 @@ function LoginForm() {
     }
   }, [router, setSession, user]);
 
+  function finishSession(session: {
+    accessToken: string;
+    deviceToken?: string | null;
+    user: {
+      id: string;
+      tenantId: string;
+      name: string;
+      email: string | null;
+      phone: string;
+      role: Parameters<typeof homePathForRole>[0];
+    };
+  }) {
+    writeDeviceToken(session.deviceToken);
+    setSession({
+      accessToken: session.accessToken,
+      user: session.user,
+    });
+    router.replace(homePathForRole(session.user.role));
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setSubmitting(true);
 
     try {
-      const session = await api.login({
+      if (challengeId) {
+        const session = await api.verifyStaffMfa({
+          challengeId,
+          code,
+          trustDevice: true,
+        });
+        finishSession(session);
+        return;
+      }
+
+      const result = await api.login({
         email,
         password,
+        deviceToken: readDeviceToken(),
       });
 
-      setSession({
-        accessToken: session.accessToken,
-        user: session.user,
-      });
-      router.replace(homePathForRole(session.user.role));
+      if ("mfaRequired" in result && result.mfaRequired) {
+        setChallengeId(result.challengeId);
+        setEmailHint(result.emailHint);
+        setPreviewCode(result.previewCode);
+        setCode("");
+        return;
+      }
+
+      if ("accessToken" in result) {
+        finishSession(result);
+      }
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {
@@ -77,38 +148,78 @@ function LoginForm() {
           <ShieldCheck className="size-6" strokeWidth={1.8} />
         </div>
         <h1 className="mt-5 text-2xl font-semibold tracking-tight text-zinc-50">
-          Entrar no Clubby
+          {challengeId ? "Confirme o acesso" : "Entrar no Clubby"}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-          Super-Admin vai para o painel global. Gestores e equipe seguem para o
-          painel do estabelecimento.
+          {challengeId
+            ? `Enviamos um código para ${emailHint ?? "seu e-mail"}. Em aparelhos conhecidos, o próximo login pode pular esta etapa.`
+            : "Use o e-mail da equipe. Super-Admin vai para o painel global; gestores seguem para o estabelecimento."}
         </p>
-        <label className="mt-8 block">
-          <span className="mb-1.5 block text-xs font-medium text-zinc-400">
-            E-mail
-          </span>
-          <input
-            type="email"
-            required
-            autoComplete="username"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
-          />
-        </label>
-        <label className="mt-3 block">
-          <span className="mb-1.5 block text-xs font-medium text-zinc-400">
-            Senha
-          </span>
-          <input
-            type="password"
-            required
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
-          />
-        </label>
+
+        {!challengeId ? (
+          <>
+            <label className="mt-8 block">
+              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                E-mail
+              </span>
+              <input
+                type="email"
+                required
+                autoComplete="username"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
+              />
+            </label>
+            <label className="mt-3 block">
+              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                Senha
+              </span>
+              <input
+                type="password"
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
+              />
+            </label>
+          </>
+        ) : (
+          <label className="mt-8 block">
+            <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+              Código de 6 dígitos
+            </span>
+            <input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              required
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
+            />
+            {previewCode ? (
+              <p className="mt-2 rounded-xl bg-zinc-900 px-3 py-2 text-xs text-zinc-400">
+                Código de demonstração:{" "}
+                <span className="font-semibold text-zinc-100">{previewCode}</span>
+              </p>
+            ) : null}
+            <button
+              type="button"
+              className="mt-3 text-xs font-semibold text-zinc-400"
+              onClick={() => {
+                setChallengeId(null);
+                setCode("");
+                setPreviewCode(null);
+                setEmailHint(null);
+                setError(null);
+              }}
+            >
+              Voltar
+            </button>
+          </label>
+        )}
+
         {error ? (
           <p className="mt-4 text-sm text-red-300">{error}</p>
         ) : null}
@@ -117,9 +228,9 @@ function LoginForm() {
           disabled={submitting}
           className="mt-6 w-full rounded-xl bg-amber-300 px-4 py-3 text-sm font-semibold text-zinc-950 disabled:opacity-60"
         >
-          {submitting ? "Entrando..." : "Entrar"}
+          {submitting ? "Aguarde..." : challengeId ? "Confirmar código" : "Entrar"}
         </button>
-        {isDemoMode() ? (
+        {isDemoMode() && !challengeId ? (
           <div className="mt-6 border-t border-zinc-800 pt-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
               Atalhos da demonstração
