@@ -73,6 +73,26 @@ export type ApiTenantSettings = TenantVerticalSettings;
 export type ApiBusinessType = BusinessType;
 export type ApiTenantStatus = TenantLifecycleStatus;
 
+export type ApiPartnerContractStatus =
+  | "DRAFT"
+  | "ISSUED"
+  | "ACCEPTED"
+  | "CANCELLED";
+
+export type ApiPartnerContract = {
+  id: string;
+  version: string;
+  status: ApiPartnerContractStatus;
+  title: string;
+  bodyHtml?: string;
+  monthlyFee: number;
+  issuedAt: string | null;
+  acceptedAt: string | null;
+  acceptedByName: string | null;
+  acceptedByEmail: string | null;
+  createdAt: string;
+};
+
 export type ApiPlatformTenant = {
   id: string;
   slug: string;
@@ -105,6 +125,7 @@ export type ApiPlatformTenant = {
     clubMembers: number;
     branches: number;
   };
+  contracts?: ApiPartnerContract[];
 };
 
 export type ApiTestSeedLogin = {
@@ -1482,6 +1503,10 @@ export const api = {
     );
   },
 
+  getSuperAdminTenant(id: string) {
+    return request<ApiPlatformTenant>(`/super-admin/tenants/${id}`);
+  },
+
   createSuperAdminTenant(payload: SuperAdminCreateTenantPayload) {
     return request<ApiPlatformTenant>("/super-admin/tenants", {
       method: "POST",
@@ -1504,12 +1529,39 @@ export const api = {
       neighborhood?: string;
       city?: string;
       state?: string;
+      ownerName?: string;
+      ownerEmail?: string;
+      ownerPhone?: string;
     },
   ) {
     return request<ApiPlatformTenant>(`/super-admin/tenants/${id}`, {
       method: "PATCH",
       body: payload,
     });
+  },
+
+  issueSuperAdminPartnerContract(tenantId: string) {
+    return request<ApiPartnerContract>(
+      `/super-admin/tenants/${tenantId}/contracts`,
+      { method: "POST", body: {} },
+    );
+  },
+
+  getSuperAdminPartnerContract(tenantId: string, contractId: string) {
+    return request<ApiPartnerContract>(
+      `/super-admin/tenants/${tenantId}/contracts/${contractId}`,
+    );
+  },
+
+  acceptSuperAdminPartnerContract(
+    tenantId: string,
+    contractId: string,
+    payload?: { acceptedByName?: string; acceptedByEmail?: string },
+  ) {
+    return request<ApiPartnerContract>(
+      `/super-admin/tenants/${tenantId}/contracts/${contractId}/accept`,
+      { method: "POST", body: payload ?? {} },
+    );
   },
 
   updateSuperAdminTenantStatus(id: string, status: TenantLifecycleStatus) {

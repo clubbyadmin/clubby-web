@@ -7,11 +7,6 @@ import {
   type BusinessType,
 } from "@/lib/business-type";
 import { cn } from "@/lib/cn";
-import {
-  digitsOnly,
-  formatCep,
-  lookupCep,
-} from "@/lib/customer-profile";
 import { formatCurrency } from "@/lib/mock-data";
 import type { TenantLifecycleStatus } from "@/lib/tenant-types";
 import {
@@ -31,7 +26,8 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type InputHTMLAttributes } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const STATUS_STYLE: Record<TenantLifecycleStatus, string> = {
   PENDING: "bg-amber-400/10 text-amber-300 ring-amber-400/25",
@@ -41,6 +37,7 @@ const STATUS_STYLE: Record<TenantLifecycleStatus, string> = {
 };
 
 export function SuperAdminBoard() {
+  const router = useRouter();
   const [tenants, setTenants] = useState<ApiPlatformTenant[]>([]);
   const [metrics, setMetrics] = useState<ApiPlatformMetrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,7 +45,6 @@ export function SuperAdminBoard() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [menuId, setMenuId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<ApiPlatformTenant | null>(null);
   const [resetTarget, setResetTarget] = useState<ApiPlatformTenant | null>(null);
   const [resetResult, setResetResult] = useState<string | null>(null);
 
@@ -297,11 +293,21 @@ export function SuperAdminBoard() {
                   className="border-t border-zinc-800/70 text-zinc-300"
                 >
                   <td className="px-5 py-4">
-                    <p className="font-medium text-zinc-100">{tenant.name}</p>
-                    <p className="text-xs text-zinc-500">
-                      /{tenant.slug}
-                      {tenant.city ? ` · ${tenant.city}` : ""}
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(`/super-admin/parceiros/${tenant.id}`)
+                      }
+                      className="text-left"
+                    >
+                      <p className="font-medium text-zinc-100 hover:text-amber-200">
+                        {tenant.name}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        /{tenant.slug}
+                        {tenant.city ? ` · ${tenant.city}` : ""}
+                      </p>
+                    </button>
                   </td>
                   <td className="px-5 py-4 text-xs">
                     {BUSINESS_TYPE_LABELS[tenant.businessType]}
@@ -357,10 +363,10 @@ export function SuperAdminBoard() {
                           >
                             <ActionItem
                               icon={Pencil}
-                              label="Editar cadastro"
+                              label="Abrir ficha do cliente"
                               onClick={() => {
                                 setMenuId(null);
-                                setEditing(tenant);
+                                router.push(`/super-admin/parceiros/${tenant.id}`);
                               }}
                             />
                             <ActionItem
@@ -417,27 +423,6 @@ export function SuperAdminBoard() {
           ) : null}
         </div>
       </section>
-
-      {editing ? (
-        <EditPartnerModal
-          tenant={editing}
-          busy={busyId === editing.id}
-          onClose={() => setEditing(null)}
-          onSave={async (payload) => {
-            setBusyId(editing.id);
-            setError(null);
-            try {
-              await api.updateSuperAdminTenant(editing.id, payload);
-              setEditing(null);
-              await load();
-            } catch (requestError) {
-              setError(getErrorMessage(requestError));
-            } finally {
-              setBusyId(null);
-            }
-          }}
-        />
-      ) : null}
 
       {resetTarget ? (
         <ResetPasswordModal
@@ -625,18 +610,12 @@ function TextField({
   onChange,
   type = "text",
   required = true,
-  hint,
-  onBlur,
-  inputMode,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
   required?: boolean;
-  hint?: string | null;
-  onBlur?: () => void;
-  inputMode?: InputHTMLAttributes<HTMLInputElement>["inputMode"];
 }) {
   return (
     <label className="text-xs text-zinc-400">
@@ -645,12 +624,9 @@ function TextField({
         type={type}
         required={required}
         value={value}
-        inputMode={inputMode}
         onChange={(event) => onChange(event.target.value)}
-        onBlur={onBlur}
         className="mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
       />
-      {hint ? <span className="mt-1 block text-[11px] text-zinc-500">{hint}</span> : null}
     </label>
   );
 }
@@ -678,161 +654,6 @@ function ActionItem({
       {Icon ? <Icon className="size-3.5" /> : null}
       {label}
     </button>
-  );
-}
-
-function EditPartnerModal({
-  tenant,
-  busy,
-  onClose,
-  onSave,
-}: {
-  tenant: ApiPlatformTenant;
-  busy: boolean;
-  onClose: () => void;
-  onSave: (payload: {
-    name: string;
-    document: string;
-    whatsappNumber: string;
-    platformFee: number;
-    zipCode?: string;
-    street?: string;
-    number?: string;
-    neighborhood?: string;
-    city?: string;
-    state?: string;
-  }) => Promise<void>;
-}) {
-  const [name, setName] = useState(tenant.name);
-  const [document, setDocument] = useState(tenant.document);
-  const [whatsappNumber, setWhatsappNumber] = useState(tenant.whatsappNumber);
-  const [platformFee, setPlatformFee] = useState(String(tenant.platformFee));
-  const [zipCode, setZipCode] = useState(formatCep(tenant.zipCode ?? ""));
-  const [street, setStreet] = useState(tenant.street ?? "");
-  const [number, setNumber] = useState(tenant.number ?? "");
-  const [neighborhood, setNeighborhood] = useState(tenant.neighborhood ?? "");
-  const [city, setCity] = useState(tenant.city ?? "");
-  const [state, setState] = useState(tenant.state ?? "");
-  const [lookingCep, setLookingCep] = useState(false);
-  const [cepHint, setCepHint] = useState<string | null>(null);
-  const [lastLookedCep, setLastLookedCep] = useState("");
-
-  async function fillAddressFromCep(raw: string) {
-    const digits = digitsOnly(raw);
-    if (digits.length !== 8 || digits === lastLookedCep) {
-      return;
-    }
-
-    setLookingCep(true);
-    setCepHint("Buscando endereço...");
-    try {
-      const address = await lookupCep(digits);
-      setLastLookedCep(digits);
-
-      if (!address) {
-        setCepHint("CEP não encontrado. Preencha o endereço manualmente.");
-        return;
-      }
-
-      setStreet(address.street);
-      setNeighborhood(address.neighborhood);
-      setCity(address.city);
-      setState(address.state);
-      setCepHint("Endereço preenchido pelo CEP.");
-    } catch {
-      setCepHint("Não foi possível consultar o CEP agora.");
-    } finally {
-      setLookingCep(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4">
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          void onSave({
-            name,
-            document,
-            whatsappNumber,
-            platformFee: Number(platformFee),
-            zipCode: digitsOnly(zipCode),
-            street,
-            number,
-            neighborhood,
-            city,
-            state,
-          });
-        }}
-        className="w-full max-w-2xl rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-              Cadastro
-            </p>
-            <h3 className="mt-1 text-lg font-semibold text-zinc-50">
-              Editar {tenant.name}
-            </h3>
-          </div>
-          <button type="button" onClick={onClose} className="text-xs text-zinc-500">
-            Fechar
-          </button>
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <TextField label="Nome" value={name} onChange={setName} />
-          <TextField label="Documento" value={document} onChange={setDocument} />
-          <TextField
-            label="WhatsApp"
-            value={whatsappNumber}
-            onChange={setWhatsappNumber}
-          />
-          <TextField
-            label="Mensalidade (R$)"
-            value={platformFee}
-            onChange={setPlatformFee}
-          />
-          <TextField
-            label="CEP"
-            value={zipCode}
-            required={false}
-            inputMode="numeric"
-            hint={lookingCep ? "Buscando endereço..." : cepHint}
-            onChange={(value) => {
-              const next = formatCep(value);
-              setZipCode(next);
-              setCepHint(null);
-              if (digitsOnly(next).length === 8) {
-                void fillAddressFromCep(next);
-              }
-            }}
-            onBlur={() => void fillAddressFromCep(zipCode)}
-          />
-          <TextField label="Rua" value={street} onChange={setStreet} required={false} />
-          <TextField label="Número" value={number} onChange={setNumber} required={false} />
-          <TextField
-            label="Bairro"
-            value={neighborhood}
-            onChange={setNeighborhood}
-            required={false}
-          />
-          <TextField label="Cidade" value={city} onChange={setCity} required={false} />
-          <TextField label="UF" value={state} onChange={setState} required={false} />
-        </div>
-        <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-full px-4 py-2 text-sm text-zinc-400">
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
-          >
-            {busy ? "Salvando..." : "Salvar cadastro"}
-          </button>
-        </div>
-      </form>
-    </div>
   );
 }
 
