@@ -1592,6 +1592,25 @@ export const api = {
     });
   },
 
+  getSuperAdminPlanFees() {
+    return request<{
+      fees: Record<ApiPlatformPlan, number>;
+      labels: Record<ApiPlatformPlan, string>;
+      plans: Array<{ id: ApiPlatformPlan; label: string; fee: number }>;
+    }>("/super-admin/plan-fees");
+  },
+
+  updateSuperAdminPlanFees(fees: Partial<Record<ApiPlatformPlan, number>>) {
+    return request<{
+      fees: Record<ApiPlatformPlan, number>;
+      labels: Record<ApiPlatformPlan, string>;
+      plans: Array<{ id: ApiPlatformPlan; label: string; fee: number }>;
+    }>("/super-admin/plan-fees", {
+      method: "PATCH",
+      body: fees,
+    });
+  },
+
   changePassword(payload: { currentPassword?: string; newPassword: string }) {
     return request<{
       accessToken: string;

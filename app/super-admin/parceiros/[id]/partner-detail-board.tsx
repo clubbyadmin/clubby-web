@@ -97,6 +97,10 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
   const [lookingCep, setLookingCep] = useState(false);
   const [cepHint, setCepHint] = useState<string | null>(null);
   const [lastLookedCep, setLastLookedCep] = useState("");
+  const [planFees, setPlanFees] = useState<Record<ApiPlatformPlan, number> | null>(
+    null,
+  );
+  const [apiOutdated, setApiOutdated] = useState(false);
 
   const applyTenant = useCallback((response: ApiPlatformTenant) => {
     setTenant(response);
@@ -126,14 +130,25 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
     setOwnerName(response.owner?.name ?? "");
     setOwnerEmail(response.owner?.email ?? "");
     setOwnerPhone(response.owner?.phone ?? "");
+    setApiOutdated(
+      response.completeness == null || response.platformPlan == null,
+    );
   }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.getSuperAdminTenant(partnerId);
+      const [response, fees] = await Promise.all([
+        api.getSuperAdminTenant(partnerId),
+        api.getSuperAdminPlanFees().catch(() => null),
+      ]);
       applyTenant(response);
+      if (fees) {
+        setPlanFees(fees.fees);
+      } else {
+        setApiOutdated(true);
+      }
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {
@@ -355,6 +370,15 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
         </div>
       </div>
 
+      {apiOutdated ? (
+        <p className="mb-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+          A API de produção ainda não foi atualizada. Plano, completude e invite
+          só funcionam depois do rebuild no Lightsail (
+          <code className="text-xs">git pull</code> +{" "}
+          <code className="text-xs">docker compose ... up -d --build api</code>
+          ).
+        </p>
+      ) : null}
       {error ? <p className="mb-4 text-sm text-red-300">{error}</p> : null}
       {notice ? <p className="mb-4 text-sm text-emerald-300">{notice}</p> : null}
       {invitePassword ? (
@@ -388,17 +412,31 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
               Plano SaaS
               <select
                 value={platformPlan}
-                onChange={(event) =>
-                  setPlatformPlan(event.target.value as ApiPlatformPlan)
-                }
+                onChange={(event) => {
+                  const next = event.target.value as ApiPlatformPlan;
+                  setPlatformPlan(next);
+                  if (planFees?.[next] != null) {
+                    setPlatformFee(String(planFees[next]));
+                  }
+                }}
                 className="mt-1 h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100"
               >
                 {(Object.keys(PLAN_LABELS) as ApiPlatformPlan[]).map((plan) => (
                   <option key={plan} value={plan}>
                     {PLAN_LABELS[plan]}
+                    {planFees?.[plan] != null
+                      ? ` · R$ ${planFees[plan]}`
+                      : ""}
                   </option>
                 ))}
               </select>
+              <span className="mt-1 block text-[11px] text-zinc-500">
+                Valores padrão em{" "}
+                <a href="/super-admin/planos" className="text-amber-300">
+                  Planos
+                </a>
+                . A mensalidade abaixo pode ser customizada neste parceiro.
+              </span>
             </label>
             <Field
               label="Mensalidade (R$)"

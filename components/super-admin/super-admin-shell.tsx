@@ -109,6 +109,17 @@ export function SuperAdminShell({ children }: { children: ReactNode }) {
                 Parceiros
               </Link>
               <Link
+                href="/super-admin/planos"
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-xs font-semibold",
+                  pathname.startsWith("/super-admin/planos")
+                    ? "bg-amber-300 text-zinc-950"
+                    : "text-zinc-400 hover:text-zinc-100",
+                )}
+              >
+                Planos
+              </Link>
+              <Link
                 href="/super-admin/whatsapp"
                 className={cn(
                   "rounded-full px-3 py-1.5 text-xs font-semibold",
