@@ -128,9 +128,14 @@ function LoginForm() {
         return;
       }
 
-      if ("accessToken" in result) {
+      if ("accessToken" in result && result.user?.role) {
         finishSession(result);
+        return;
       }
+
+      setError(
+        "O login não retornou sessão completa. Confirme o SMTP e tente de novo.",
+      );
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {
@@ -153,7 +158,7 @@ function LoginForm() {
         <p className="mt-2 text-sm leading-relaxed text-zinc-500">
           {challengeId
             ? `Enviamos um código para ${emailHint ?? "seu e-mail"}. Em aparelhos conhecidos, o próximo login pode pular esta etapa.`
-            : "Use o e-mail da equipe. Super-Admin vai para o painel global; gestores seguem para o estabelecimento."}
+            : "Super-Admin vai para o painel global. Gestores e equipe usam o e-mail cadastrado no salão."}
         </p>
 
         {!challengeId ? (
