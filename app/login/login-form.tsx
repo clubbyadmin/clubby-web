@@ -1,7 +1,10 @@
 "use client";
 
 import { AdminSessionProvider, useAdminSession } from "@/contexts/admin-session-context";
-import { homePathForRole } from "@/lib/admin-rbac";
+import {
+  homePathForRole,
+  type AdminSessionUser,
+} from "@/lib/admin-rbac";
 import { readStoredAdminUser } from "@/lib/admin-session-storage";
 import { isDemoMode } from "@/lib/app-mode";
 import { DEMO_PRESENTATION_LOGINS } from "@/lib/demo-logins";
@@ -81,14 +84,7 @@ function LoginForm() {
   function finishSession(session: {
     accessToken: string;
     deviceToken?: string | null;
-    user: {
-      id: string;
-      tenantId: string;
-      name: string;
-      email: string | null;
-      phone: string;
-      role: Parameters<typeof homePathForRole>[0];
-    };
+    user: AdminSessionUser;
   }) {
     writeDeviceToken(session.deviceToken);
     setSession({

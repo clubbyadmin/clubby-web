@@ -83,6 +83,12 @@ export function TestesBoard() {
         phone: login.phone,
         password,
       });
+      if (!("accessToken" in session) || !session.user?.role) {
+        setError(
+          "Este login pediu MFA. Use /login com e-mail da equipe nesta conta.",
+        );
+        return;
+      }
       setSession({
         accessToken: session.accessToken,
         user: session.user,
@@ -106,6 +112,10 @@ export function TestesBoard() {
           email: PLATFORM_SUPER_ADMIN_EMAIL,
           password,
         });
+        if (!("accessToken" in session) || !session.user?.role) {
+          setError("O Super-Admin pediu MFA. Entre por /login.");
+          return;
+        }
         setSession({
           accessToken: session.accessToken,
           user: session.user,
