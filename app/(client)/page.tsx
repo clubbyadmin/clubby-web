@@ -1,4 +1,5 @@
 import { ClubbyPortal } from "@/components/platform/clubby-portal";
+import { PortalCacheBust } from "@/components/platform/portal-cache-bust";
 import type { Metadata } from "next";
 import { Syne } from "next/font/google";
 
@@ -17,6 +18,7 @@ export const metadata: Metadata = {
 export default function Home() {
   return (
     <div className={`${portalDisplay.variable} min-h-full`}>
+      <PortalCacheBust />
       <ClubbyPortal />
     </div>
   );

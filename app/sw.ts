@@ -2,7 +2,7 @@
 /// <reference lib="webworker" />
 import { defaultCache } from "@serwist/turbopack/worker";
 import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
-import { Serwist } from "serwist";
+import { NetworkOnly, Serwist } from "serwist";
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -12,6 +12,9 @@ declare global {
 
 declare const self: ServiceWorkerGlobalScope;
 
+// bump: portal-home-2026-11-10 — força troca do SW após a home deixar de ser o salão de teste
+const CACHE_REVISION = "portal-home-2026-11-10";
+
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,
   precacheOptions: {
@@ -20,7 +23,13 @@ const serwist = new Serwist({
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: false,
-  runtimeCaching: defaultCache,
+  runtimeCaching: [
+    {
+      matcher: ({ request }) => request.mode === "navigate",
+      handler: new NetworkOnly(),
+    },
+    ...defaultCache,
+  ],
   fallbacks: {
     entries: [
       {
@@ -34,3 +43,5 @@ const serwist = new Serwist({
 });
 
 serwist.addEventListeners();
+
+void CACHE_REVISION;
