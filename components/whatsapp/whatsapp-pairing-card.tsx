@@ -29,6 +29,7 @@ export function WhatsappPairingCard({
   const start = useCallback(async () => {
     setBusy(true);
     setError(null);
+    setPairing(null);
     try {
       const result =
         mode === "super-admin"
@@ -36,6 +37,15 @@ export function WhatsappPairingCard({
           : await api.startWhatsappPairing(tenantId);
       setPairing(result);
       onConfigChange?.(result.config);
+      if (
+        result.status === "WAITING_QR" &&
+        !result.qrcodeBase64 &&
+        !result.pairingCode
+      ) {
+        setError(
+          "A Evolution respondeu sem QR. Rode deploy/test-evolution-qr.sh no Lightsail e envie a saída.",
+        );
+      }
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {
@@ -99,7 +109,11 @@ export function WhatsappPairingCard({
             ) : (
               <QrCode className="size-4" />
             )}
-            {connected ? "Gerar novo QR" : "Conectar WhatsApp"}
+            {busy
+              ? "Gerando QR..."
+              : connected
+                ? "Gerar novo QR"
+                : "Conectar WhatsApp"}
           </button>
           {waiting ? (
             <button
