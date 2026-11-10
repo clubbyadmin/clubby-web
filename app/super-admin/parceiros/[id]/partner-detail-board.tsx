@@ -157,8 +157,10 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
     );
   }, []);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { soft?: boolean }) => {
+    if (!opts?.soft) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const [response, fees] = await Promise.all([
@@ -174,7 +176,9 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {
-      setLoading(false);
+      if (!opts?.soft) {
+        setLoading(false);
+      }
     }
   }, [applyTenant, partnerId]);
 
@@ -791,7 +795,10 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
       ) : null}
 
       {tab === "whatsapp" ? (
-        <PartnerWhatsappPanel partnerId={partnerId} onChanged={() => void load()} />
+        <PartnerWhatsappPanel
+          partnerId={partnerId}
+          onChanged={() => void load({ soft: true })}
+        />
       ) : null}
 
       {tab === "contratos" ? (

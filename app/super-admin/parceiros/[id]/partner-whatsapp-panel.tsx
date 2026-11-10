@@ -183,7 +183,11 @@ export function PartnerWhatsappPanel({
           setPhoneNumber(next.phoneNumber ?? "");
           setIsActive(next.isActive);
           setAutomations(next.automations);
-          onChanged?.();
+          // Não chamar onChanged/load aqui: recarregava a ficha inteira
+          // e apagava o QR antes de aparecer.
+          if (next.status === "CONNECTED") {
+            onChanged?.();
+          }
         }}
       />
 
