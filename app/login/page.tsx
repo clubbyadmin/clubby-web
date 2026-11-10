@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PortalCacheBust } from "@/components/platform/portal-cache-bust";
 import { LoginPage } from "./login-form";
 
 export const metadata: Metadata = {
@@ -7,5 +8,10 @@ export const metadata: Metadata = {
 };
 
 export default function LoginRoute() {
-  return <LoginPage />;
+  return (
+    <>
+      <PortalCacheBust />
+      <LoginPage />
+    </>
+  );
 }
