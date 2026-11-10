@@ -12,8 +12,8 @@ declare global {
 
 declare const self: ServiceWorkerGlobalScope;
 
-// bump: login-polish-2026-11-10 — força troca do SW após redesenho do login
-const CACHE_REVISION = "login-polish-2026-11-10";
+// bump: platform-login-2026-11-10 — força troca do SW após separar Super-Admin
+const CACHE_REVISION = "platform-login-2026-11-10";
 
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,

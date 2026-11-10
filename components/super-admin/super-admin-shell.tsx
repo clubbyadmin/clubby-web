@@ -58,10 +58,10 @@ export function SuperAdminShell({ children }: { children: ReactNode }) {
             Entre com sua conta para continuar.
           </p>
           <Link
-            href="/login"
+            href="/acesso-plataforma"
             className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-amber-300 px-4 py-3 text-sm font-semibold text-zinc-950"
           >
-            Ir para o login
+            Entrar na plataforma
           </Link>
         </div>
       </div>
@@ -160,7 +160,7 @@ export function SuperAdminShell({ children }: { children: ReactNode }) {
               type="button"
               onClick={() => {
                 clearSession();
-                router.push("/login");
+                router.push("/acesso-plataforma");
               }}
               className="rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-medium text-zinc-400 ring-1 ring-zinc-800 hover:text-zinc-200"
             >

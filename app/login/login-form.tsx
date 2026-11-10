@@ -7,7 +7,10 @@ import {
 } from "@/lib/admin-rbac";
 import { readStoredAdminUser } from "@/lib/admin-session-storage";
 import { isDemoMode } from "@/lib/app-mode";
-import { DEMO_PRESENTATION_LOGINS } from "@/lib/demo-logins";
+import {
+  DEMO_PLATFORM_LOGINS,
+  DEMO_STAFF_LOGINS,
+} from "@/lib/demo-logins";
 import { PLATFORM_SUPER_ADMIN_EMAIL } from "@/lib/platform-auth";
 import { api, getAccessToken, getErrorMessage } from "@/services/api";
 import { ArrowLeft, ArrowRight } from "lucide-react";
@@ -18,6 +21,7 @@ import { useEffect, useState } from "react";
 const DEVICE_TOKEN_KEY = "clubby.admin.deviceToken";
 
 type Mode = "login" | "forgot" | "reset" | "mfa" | "change-password";
+type Audience = "staff" | "platform";
 
 type StaffProvider = "google" | "apple" | "microsoft";
 
@@ -75,19 +79,22 @@ function clearOAuthHash() {
   window.history.replaceState({}, "", `${url.pathname}${url.search}`);
 }
 
-export function LoginPage() {
+export function LoginPage({ audience = "staff" }: { audience?: Audience }) {
   return (
     <AdminSessionProvider>
-      <LoginForm />
+      <LoginForm audience={audience} />
     </AdminSessionProvider>
   );
 }
 
-function LoginForm() {
+function LoginForm({ audience }: { audience: Audience }) {
   const router = useRouter();
   const { user, setSession } = useAdminSession();
+  const isPlatform = audience === "platform";
   const [mode, setMode] = useState<Mode>("login");
-  const [email, setEmail] = useState(PLATFORM_SUPER_ADMIN_EMAIL);
+  const [email, setEmail] = useState(
+    isPlatform ? PLATFORM_SUPER_ADMIN_EMAIL : "",
+  );
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -142,6 +149,12 @@ function LoginForm() {
 
   useEffect(() => {
     if (user && mode !== "change-password" && !user.mustChangePassword) {
+      if (isPlatform && user.role !== "SUPER_ADMIN") {
+        return;
+      }
+      if (!isPlatform && user.role === "SUPER_ADMIN") {
+        return;
+      }
       router.replace(homePathForRole(user.role));
       return;
     }
@@ -155,6 +168,14 @@ function LoginForm() {
       storedUser.role !== "CUSTOMER" &&
       !user
     ) {
+      const roleOk = isPlatform
+        ? storedUser.role === "SUPER_ADMIN"
+        : storedUser.role !== "SUPER_ADMIN";
+
+      if (!roleOk) {
+        return;
+      }
+
       if (storedUser.mustChangePassword) {
         setSession({ accessToken: storedToken, user: storedUser });
         setMode("change-password");
@@ -165,7 +186,7 @@ function LoginForm() {
         user: storedUser,
       });
     }
-  }, [mode, router, setSession, user]);
+  }, [isPlatform, mode, router, setSession, user]);
 
   function finishSession(session: {
     accessToken: string;
@@ -173,6 +194,18 @@ function LoginForm() {
     mustChangePassword?: boolean;
     user: AdminSessionUser & { mustChangePassword?: boolean };
   }) {
+    const role = session.user.role;
+
+    if (isPlatform && role !== "SUPER_ADMIN") {
+      setError("Esta conta não tem acesso à plataforma.");
+      return;
+    }
+
+    if (!isPlatform && role === "SUPER_ADMIN") {
+      setError("Use o link de acesso à plataforma para esta conta.");
+      return;
+    }
+
     writeDeviceToken(session.deviceToken);
     const nextUser: AdminSessionUser = {
       ...session.user,
@@ -220,7 +253,9 @@ function LoginForm() {
       }
 
       if (mode === "forgot") {
-        const result = await api.requestPasswordReset(email);
+        const result = isPlatform
+          ? await api.requestPlatformPasswordReset(email)
+          : await api.requestPasswordReset(email);
         setEmailHint(result.emailHint);
         setPreviewCode(result.previewCode);
         setInfo(result.message);
@@ -248,11 +283,17 @@ function LoginForm() {
           setError("A confirmação da senha não confere.");
           return;
         }
-        const session = await api.resetPassword({
-          challengeId,
-          code,
-          newPassword,
-        });
+        const session = isPlatform
+          ? await api.resetPlatformPassword({
+              challengeId,
+              code,
+              newPassword,
+            })
+          : await api.resetPassword({
+              challengeId,
+              code,
+              newPassword,
+            });
         finishSession(session);
         return;
       }
@@ -267,11 +308,17 @@ function LoginForm() {
         return;
       }
 
-      const result = await api.login({
-        email,
-        password,
-        deviceToken: readDeviceToken(),
-      });
+      const result = isPlatform
+        ? await api.loginPlatform({
+            email,
+            password,
+            deviceToken: readDeviceToken(),
+          })
+        : await api.login({
+            email,
+            password,
+            deviceToken: readDeviceToken(),
+          });
 
       if ("mfaRequired" in result && result.mfaRequired) {
         setChallengeId(result.challengeId);
@@ -332,7 +379,9 @@ function LoginForm() {
           ? "Definir senha"
           : mode === "mfa"
             ? "Verificação"
-            : "Acesso à gestão";
+            : isPlatform
+              ? "Acesso à plataforma"
+              : "Acesso à gestão";
 
   const subtitle =
     mode === "change-password"
@@ -343,7 +392,11 @@ function LoginForm() {
           ? `Código enviado para ${emailHint ?? "seu e-mail"}.`
           : mode === "mfa"
             ? `Código enviado para ${emailHint ?? "seu e-mail"}.`
-            : "Painel do salão e Super-Admin em um só lugar.";
+            : isPlatform
+              ? "Entre com a conta da operação Clubby."
+              : "Use o e-mail cadastrado no seu estabelecimento.";
+
+  const demoLogins = isPlatform ? DEMO_PLATFORM_LOGINS : DEMO_STAFF_LOGINS;
 
   const submitLabel = submitting
     ? "Aguarde..."
@@ -420,31 +473,35 @@ function LoginForm() {
           <div className="mt-8 space-y-4 animate-portal-rise">
             {mode === "login" ? (
               <>
-                <div className="grid grid-cols-3 gap-2">
-                  {PROVIDERS.map((provider) => (
-                    <button
-                      key={provider.id}
-                      type="button"
-                      disabled={Boolean(oauthBusy) || submitting}
-                      onClick={() => void startProvider(provider.id)}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/50 text-xs font-medium text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-900 disabled:opacity-50"
-                      aria-label={`Continuar com ${provider.label}`}
-                    >
-                      <ProviderIcon id={provider.id} />
-                      <span className="hidden sm:inline">
-                        {oauthBusy === provider.id ? "…" : provider.label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                {!isPlatform ? (
+                  <>
+                    <div className="grid grid-cols-3 gap-2">
+                      {PROVIDERS.map((provider) => (
+                        <button
+                          key={provider.id}
+                          type="button"
+                          disabled={Boolean(oauthBusy) || submitting}
+                          onClick={() => void startProvider(provider.id)}
+                          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/50 text-xs font-medium text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-900 disabled:opacity-50"
+                          aria-label={`Continuar com ${provider.label}`}
+                        >
+                          <ProviderIcon id={provider.id} />
+                          <span className="hidden sm:inline">
+                            {oauthBusy === provider.id ? "…" : provider.label}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
 
-                <div className="flex items-center gap-3 pt-1">
-                  <span className="h-px flex-1 bg-zinc-800/80" />
-                  <span className="text-[11px] tracking-[0.12em] text-zinc-600">
-                    e-mail
-                  </span>
-                  <span className="h-px flex-1 bg-zinc-800/80" />
-                </div>
+                    <div className="flex items-center gap-3 pt-1">
+                      <span className="h-px flex-1 bg-zinc-800/80" />
+                      <span className="text-[11px] tracking-[0.12em] text-zinc-600">
+                        e-mail
+                      </span>
+                      <span className="h-px flex-1 bg-zinc-800/80" />
+                    </div>
+                  </>
+                ) : null}
 
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-medium text-zinc-400">
@@ -603,7 +660,7 @@ function LoginForm() {
                 Demonstração
               </p>
               <ul className="mt-3 space-y-1.5">
-                {DEMO_PRESENTATION_LOGINS.map((login) => (
+                {demoLogins.map((login) => (
                   <li key={login.id}>
                     <button
                       type="button"

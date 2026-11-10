@@ -108,12 +108,12 @@ export function TestesBoard() {
     try {
       if (user?.role !== "SUPER_ADMIN") {
         resetTenantSlug();
-        const session = await api.login({
+        const session = await api.loginPlatform({
           email: PLATFORM_SUPER_ADMIN_EMAIL,
           password,
         });
         if (!("accessToken" in session) || !session.user?.role) {
-          setError("O Super-Admin pediu MFA. Entre por /login.");
+          setError("O Super-Admin pediu MFA. Entre por /acesso-plataforma.");
           return;
         }
         setSession({

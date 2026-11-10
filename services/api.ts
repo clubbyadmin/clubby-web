@@ -1362,6 +1362,38 @@ export const api = {
     });
   },
 
+  loginPlatform(payload: {
+    email?: string;
+    password: string;
+    deviceToken?: string | null;
+  }) {
+    return request<
+      | {
+          accessToken: string;
+          deviceToken?: string | null;
+          mustChangePassword?: boolean;
+          user: {
+            id: string;
+            tenantId: string;
+            name: string;
+            email: string | null;
+            phone: string;
+            role: ApiUserRole;
+            mustChangePassword?: boolean;
+          };
+        }
+      | {
+          mfaRequired: true;
+          challengeId: string;
+          emailHint: string;
+          previewCode: string | null;
+        }
+    >("/auth/platform/login", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
   verifyStaffMfa(payload: {
     challengeId: string;
     code: string;
@@ -1418,6 +1450,43 @@ export const api = {
         mustChangePassword?: boolean;
       };
     }>("/auth/password/reset", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  requestPlatformPasswordReset(email: string) {
+    return request<{
+      ok: true;
+      challengeId: string | null;
+      emailHint: string;
+      previewCode: string | null;
+      message: string;
+    }>("/auth/platform/password/forgot", {
+      method: "POST",
+      body: { email },
+    });
+  },
+
+  resetPlatformPassword(payload: {
+    challengeId: string;
+    code: string;
+    newPassword: string;
+  }) {
+    return request<{
+      accessToken: string;
+      deviceToken?: string | null;
+      mustChangePassword?: boolean;
+      user: {
+        id: string;
+        tenantId: string;
+        name: string;
+        email: string | null;
+        phone: string;
+        role: ApiUserRole;
+        mustChangePassword?: boolean;
+      };
+    }>("/auth/platform/password/reset", {
       method: "POST",
       body: payload,
     });

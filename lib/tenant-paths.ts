@@ -5,6 +5,7 @@ export const RESERVED_TENANT_SLUGS = new Set([
   "parceiro",
   "cadastro",
   "login",
+  "acesso-plataforma",
   "super-admin",
   "clubby",
   "clubby-platform",
