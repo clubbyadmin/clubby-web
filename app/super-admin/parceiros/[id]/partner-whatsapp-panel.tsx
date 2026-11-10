@@ -1,6 +1,7 @@
 "use client";
 
 import { InboundBotControl } from "@/components/whatsapp/inbound-bot-control";
+import { WhatsappConversationInbox } from "@/components/whatsapp/whatsapp-conversation-inbox";
 import { WhatsappPairingCard } from "@/components/whatsapp/whatsapp-pairing-card";
 import {
   api,
@@ -10,7 +11,7 @@ import {
   type ApiWhatsappConfig,
   type ApiWhatsappProvider,
 } from "@/services/api";
-import { Loader2, MessageCircle, PlugZap, Save, Send } from "lucide-react";
+import { Loader2, PlugZap, Save, Send } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Field, Section } from "./partner-shared";
 
@@ -405,36 +406,7 @@ export function PartnerWhatsappPanel({
         </form>
       </Section>
 
-      <Section title="Últimos disparos">
-        {logs.length === 0 ? (
-          <p className="text-sm text-zinc-500">Nenhum log ainda.</p>
-        ) : (
-          <div className="space-y-2">
-            {logs.slice(0, 20).map((log) => (
-              <div
-                key={log.id}
-                className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="inline-flex items-center gap-2 text-sm text-zinc-100">
-                    <MessageCircle className="size-3.5 text-zinc-500" />
-                    {log.recipientPhone}
-                  </p>
-                  <span className="text-[11px] uppercase tracking-wide text-zinc-500">
-                    {log.type} · {log.status}
-                  </span>
-                </div>
-                <p className="mt-1 line-clamp-2 text-xs text-zinc-400">
-                  {log.messageContent}
-                </p>
-                {log.errorMessage ? (
-                  <p className="mt-1 text-xs text-red-300">{log.errorMessage}</p>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
+      <WhatsappConversationInbox logs={logs} title="Conversas por WhatsApp" />
     </div>
   );
 }

@@ -1664,9 +1664,20 @@ export const api = {
     });
   },
 
-  getSuperAdminTenantWhatsappLogs(id: string) {
+  getSuperAdminTenantWhatsappLogs(
+    id: string,
+    params?: {
+      type?: ApiWhatsappMessageType;
+      status?: ApiWhatsappMessageStatus;
+      phone?: string;
+    },
+  ) {
     return request<ApiMessageLog[]>(
-      `/super-admin/tenants/${id}/whatsapp/logs`,
+      `/super-admin/tenants/${id}/whatsapp/logs${buildQuery({
+        type: params?.type,
+        status: params?.status,
+        phone: params?.phone,
+      })}`,
     );
   },
 
@@ -2345,12 +2356,14 @@ export const api = {
     tenantId: string;
     type?: ApiWhatsappMessageType;
     status?: ApiWhatsappMessageStatus;
+    phone?: string;
   }) {
     return request<ApiMessageLog[]>(
       `/whatsapp/logs${buildQuery({
         tenantId: params.tenantId,
         type: params.type,
         status: params.status,
+        phone: params.phone,
       })}`,
     );
   },

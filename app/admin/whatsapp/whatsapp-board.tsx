@@ -5,6 +5,7 @@ import { ErrorState, LoadingState } from "@/components/api-state";
 import { AccentIconWrap } from "@/components/shell/accent-ui";
 import { TenantBadge } from "@/components/tenant-brand";
 import { InboundBotControl } from "@/components/whatsapp/inbound-bot-control";
+import { WhatsappConversationInbox } from "@/components/whatsapp/whatsapp-conversation-inbox";
 import { WhatsappPairingCard } from "@/components/whatsapp/whatsapp-pairing-card";
 import { useTenant } from "@/contexts/tenant-context";
 import { isDemoMode } from "@/lib/app-mode";
@@ -15,8 +16,6 @@ import {
   type ApiMessageLog,
   type ApiWhatsappAutomations,
   type ApiWhatsappConfig,
-  type ApiWhatsappMessageStatus,
-  type ApiWhatsappMessageType,
   type ApiWhatsappProvider,
 } from "@/services/api";
 import {
@@ -38,21 +37,6 @@ const PROVIDER_LABELS: Record<ApiWhatsappProvider, string> = {
   MOCK: "Simulador Clubby (dev)",
   EVOLUTION: "Evolution API",
   WEBHOOK: "Webhook genérico",
-};
-
-const TYPE_LABELS: Record<ApiWhatsappMessageType, string> = {
-  REMINDER: "Lembrete",
-  BIRTHDAY: "Aniversário",
-  WAITLIST: "Fila de espera",
-  MARKETING: "Marketing",
-  MANUAL: "Manual",
-  INBOUND: "Recebida",
-};
-
-const STATUS_STYLE: Record<ApiWhatsappMessageStatus, string> = {
-  SENT: "bg-emerald-400/10 text-emerald-300 ring-emerald-400/25",
-  FAILED: "bg-red-400/10 text-red-300 ring-red-400/25",
-  RECEIVED: "bg-sky-400/10 text-sky-300 ring-sky-400/25",
 };
 
 export function WhatsappBoard() {
@@ -562,59 +546,7 @@ export function WhatsappBoard() {
             </section>
           ) : null}
 
-          <section className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950/70">
-            <div className="border-b border-zinc-800 px-5 py-4">
-              <h2 className="text-sm font-semibold text-zinc-100">
-                Histórico de disparos
-              </h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="text-[11px] uppercase tracking-wide text-zinc-500">
-                  <tr>
-                    <th className="px-5 py-3 font-medium">Quando</th>
-                    <th className="px-5 py-3 font-medium">Destino</th>
-                    <th className="px-5 py-3 font-medium">Tipo</th>
-                    <th className="px-5 py-3 font-medium">Status</th>
-                    <th className="px-5 py-3 font-medium">Mensagem</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {logs.map((log) => (
-                    <tr key={log.id} className="border-t border-zinc-800/80">
-                      <td className="whitespace-nowrap px-5 py-3 text-xs text-zinc-500">
-                        {new Date(log.sentAt).toLocaleString("pt-BR")}
-                      </td>
-                      <td className="px-5 py-3 text-zinc-200">
-                        {log.recipientPhone}
-                      </td>
-                      <td className="px-5 py-3 text-xs text-zinc-400">
-                        {TYPE_LABELS[log.type]}
-                      </td>
-                      <td className="px-5 py-3">
-                        <span
-                          className={cn(
-                            "inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
-                            STATUS_STYLE[log.status],
-                          )}
-                        >
-                          {log.status === "SENT" ? "Enviado" : "Falhou"}
-                        </span>
-                      </td>
-                      <td className="max-w-sm truncate px-5 py-3 text-xs text-zinc-400">
-                        {log.errorMessage ?? log.messageContent}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {logs.length === 0 ? (
-                <p className="px-5 py-8 text-center text-sm text-zinc-500">
-                  Nenhum disparo ainda. Salve a conexão e envie um teste.
-                </p>
-              ) : null}
-            </div>
-          </section>
+          <WhatsappConversationInbox logs={logs} title="Conversas por WhatsApp" />
         </div>
       )}
     </div>
