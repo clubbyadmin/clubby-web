@@ -4,6 +4,7 @@ import { AdminNav } from "@/components/admin-nav";
 import { ErrorState, LoadingState } from "@/components/api-state";
 import { AccentIconWrap } from "@/components/shell/accent-ui";
 import { TenantBadge } from "@/components/tenant-brand";
+import { WhatsappPairingCard } from "@/components/whatsapp/whatsapp-pairing-card";
 import { useTenant } from "@/contexts/tenant-context";
 import { isDemoMode } from "@/lib/app-mode";
 import { cn } from "@/lib/cn";
@@ -245,14 +246,35 @@ export function WhatsappBoard() {
 
           {isDemoMode() ? <ConversationTester /> : null}
 
+          {tenantId ? (
+            <WhatsappPairingCard
+              mode="tenant"
+              tenantId={tenantId}
+              config={config}
+              onConfigChange={(next) => {
+                setConfig(next);
+                setProvider(next.provider);
+                setApiUrl(next.apiUrl ?? "");
+                setInstanceName(next.instanceName ?? "");
+                setPhoneNumber(next.phoneNumber ?? "");
+                setIsActive(next.isActive);
+                setAutomations(next.automations);
+              }}
+            />
+          ) : null}
+
           <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
             <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-5">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
                 <AccentIconWrap className="size-8">
                   <PlugZap className="size-4" />
                 </AccentIconWrap>
-                Instância
+                Configuração avançada
               </h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                Só use se a plataforma não tiver Evolution global. O fluxo
+                normal é o botão Conectar WhatsApp acima.
+              </p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <label className="text-xs text-zinc-400 sm:col-span-2">
                   Provedor

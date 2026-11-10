@@ -1,5 +1,6 @@
 "use client";
 
+import { WhatsappPairingCard } from "@/components/whatsapp/whatsapp-pairing-card";
 import {
   api,
   getErrorMessage,
@@ -170,9 +171,25 @@ export function PartnerWhatsappPanel({
         </div>
       </div>
 
+      <WhatsappPairingCard
+        mode="super-admin"
+        tenantId={partnerId}
+        config={config}
+        onConfigChange={(next) => {
+          setConfig(next);
+          setProvider(next.provider);
+          setApiUrl(next.apiUrl ?? "");
+          setInstanceName(next.instanceName ?? "");
+          setPhoneNumber(next.phoneNumber ?? "");
+          setIsActive(next.isActive);
+          setAutomations(next.automations);
+          onChanged?.();
+        }}
+      />
+
       <Section
-        title="Instância e conexão"
-        description="Configure o bot deste estabelecimento sem sair da ficha do parceiro."
+        title="Configuração avançada"
+        description="Opcional. Com EVOLUTION_API_URL/KEY no servidor, o QR funciona sem preencher estes campos."
       >
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-xs text-zinc-400 sm:col-span-2">

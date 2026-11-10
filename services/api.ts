@@ -572,6 +572,23 @@ export type ApiWhatsappConfig = {
   lastTestAt: string | null;
   lastError: string | null;
   automations: ApiWhatsappAutomations;
+  pairingReady?: boolean;
+  platformEvolutionReady?: boolean;
+};
+
+export type ApiWhatsappPairingStatus =
+  | "NOT_STARTED"
+  | "WAITING_QR"
+  | "CONNECTED"
+  | "ERROR";
+
+export type ApiWhatsappPairing = {
+  status: ApiWhatsappPairingStatus;
+  instanceName: string | null;
+  qrcodeBase64: string | null;
+  pairingCode: string | null;
+  message: string;
+  config: ApiWhatsappConfig;
 };
 
 export type ApiMessageLog = {
@@ -1607,6 +1624,19 @@ export const api = {
     });
   },
 
+  startSuperAdminTenantWhatsappPairing(id: string) {
+    return request<ApiWhatsappPairing>(
+      `/super-admin/tenants/${id}/whatsapp/pairing/start`,
+      { method: "POST", body: {} },
+    );
+  },
+
+  getSuperAdminTenantWhatsappPairingStatus(id: string) {
+    return request<ApiWhatsappPairing>(
+      `/super-admin/tenants/${id}/whatsapp/pairing/status`,
+    );
+  },
+
   getSuperAdminTenantWhatsappLogs(id: string) {
     return request<ApiMessageLog[]>(
       `/super-admin/tenants/${id}/whatsapp/logs`,
@@ -2206,6 +2236,19 @@ export const api = {
       method: "POST",
       body: payload,
     });
+  },
+
+  startWhatsappPairing(tenantId?: string) {
+    return request<ApiWhatsappPairing>(
+      `/whatsapp/pairing/start${buildQuery({ tenantId })}`,
+      { method: "POST", body: {} },
+    );
+  },
+
+  getWhatsappPairingStatus(tenantId?: string) {
+    return request<ApiWhatsappPairing>(
+      `/whatsapp/pairing/status${buildQuery({ tenantId })}`,
+    );
   },
 
   getAssignmentPolicy() {
