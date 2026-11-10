@@ -330,11 +330,20 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
       const lower = item.toLowerCase();
       let target: PartnerTab = "cadastro";
       if (lower.includes("contrato")) target = "contratos";
-      else if (lower.includes("whatsapp") || lower.includes("bot"))
+      else if (
+        lower.includes("whatsapp") ||
+        lower.includes("bot") ||
+        lower.includes("serviço") ||
+        lower.includes("servico")
+      )
         target = "whatsapp";
-      else if (lower.includes("serviço") || lower.includes("servico"))
-        target = "visao";
-      else if (lower.includes("vertical") || lower.includes("plano"))
+      else if (lower.includes("cliente") || lower.includes("base"))
+        target = "migracao";
+      else if (
+        lower.includes("vertical") ||
+        lower.includes("plano") ||
+        lower.includes("equipe")
+      )
         target = "plano";
       return { label: item, target };
     });
