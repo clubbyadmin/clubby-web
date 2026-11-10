@@ -16,15 +16,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Clubby Barbearia",
+  title: "Clubby",
   description:
-    "Agende horários e gerencie sua experiência no Studio Barbearia.",
-  applicationName: "Clubby Barbearia",
+    "Portal Clubby: agenda, WhatsApp e gestão para salões, barbearias e clínicas.",
+  applicationName: "Clubby",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Clubby Barbearia",
+    title: "Clubby",
   },
   icons: {
     icon: [{ url: "/icons/icon.svg", type: "image/svg+xml" }],

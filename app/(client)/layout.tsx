@@ -1,6 +1,6 @@
-import { ClientShell } from "@/components/shell/client-shell";
 import type { ReactNode } from "react";
 
+/** Portal Clubby e rotas legadas sem slug — sem gate de salão. */
 export default function ClientLayout({ children }: { children: ReactNode }) {
-  return <ClientShell>{children}</ClientShell>;
+  return children;
 }
