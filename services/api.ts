@@ -1386,6 +1386,49 @@ export const api = {
     });
   },
 
+  requestPasswordReset(email: string) {
+    return request<{
+      ok: true;
+      challengeId: string | null;
+      emailHint: string;
+      previewCode: string | null;
+      message: string;
+    }>("/auth/password/forgot", {
+      method: "POST",
+      body: { email },
+    });
+  },
+
+  resetPassword(payload: {
+    challengeId: string;
+    code: string;
+    newPassword: string;
+  }) {
+    return request<{
+      accessToken: string;
+      deviceToken?: string | null;
+      mustChangePassword?: boolean;
+      user: {
+        id: string;
+        tenantId: string;
+        name: string;
+        email: string | null;
+        phone: string;
+        role: ApiUserRole;
+        mustChangePassword?: boolean;
+      };
+    }>("/auth/password/reset", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  startStaffProvider(provider: "google" | "apple" | "microsoft") {
+    return request<{ url: string }>(
+      `/auth/staff/start${buildQuery({ provider })}`,
+    );
+  },
+
   startCustomerEmail(slug: string, email: string) {
     return request<{ challengeId: string; previewCode: string | null }>(
       "/auth/customer/email",
