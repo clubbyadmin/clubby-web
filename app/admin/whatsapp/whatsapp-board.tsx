@@ -168,6 +168,28 @@ export function WhatsappBoard() {
       setBotNotice(result.message);
       if (result.config) {
         setConfig(result.config);
+        setAutomations(result.config.automations);
+      }
+    } catch (requestError) {
+      setSaveError(getErrorMessage(requestError));
+    } finally {
+      setEnablingBot(false);
+    }
+  }
+
+  async function disableInboundBot() {
+    if (!tenantId) {
+      return;
+    }
+    setEnablingBot(true);
+    setBotNotice(null);
+    setSaveError(null);
+    try {
+      const result = await api.disableWhatsappInboundBot(tenantId);
+      setBotNotice(result.message);
+      if (result.config) {
+        setConfig(result.config);
+        setAutomations(result.config.automations);
       }
     } catch (requestError) {
       setSaveError(getErrorMessage(requestError));
@@ -413,21 +435,41 @@ export function WhatsappBoard() {
               O cliente manda “oi” no WhatsApp do salão e o Clubby responde,
               lista serviços e agenda.
             </p>
-            <button
-              type="button"
-              disabled={enablingBot || config?.status !== "CONNECTED"}
-              onClick={() => void enableInboundBot()}
-              className="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
-            >
-              {enablingBot ? <Loader2 className="size-4 animate-spin" /> : null}
-              Ativar respostas automáticas
-            </button>
+            <p className="mt-2 text-xs text-zinc-400">
+              Status:{" "}
+              {automations?.inboundBotEnabled === true
+                ? "ativas"
+                : automations?.inboundBotEnabled === false
+                  ? "desativadas"
+                  : "não configuradas (se já ativou antes, use Desativar)"}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={enablingBot || config?.status !== "CONNECTED"}
+                onClick={() => void enableInboundBot()}
+                className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
+              >
+                {enablingBot ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : null}
+                Ativar respostas
+              </button>
+              <button
+                type="button"
+                disabled={enablingBot || config?.status !== "CONNECTED"}
+                onClick={() => void disableInboundBot()}
+                className="inline-flex items-center gap-2 rounded-full border border-zinc-600 px-4 py-2 text-sm font-semibold text-zinc-100 disabled:opacity-60"
+              >
+                Desativar respostas
+              </button>
+            </div>
             {botNotice ? (
               <p className="mt-3 text-sm text-emerald-300">{botNotice}</p>
             ) : null}
             {config?.status !== "CONNECTED" ? (
               <p className="mt-2 text-xs text-amber-200">
-                Conecte o WhatsApp acima antes de ativar.
+                Conecte o WhatsApp acima antes de ativar ou desativar.
               </p>
             ) : null}
           </section>
@@ -533,6 +575,15 @@ export function WhatsappBoard() {
                 Variáveis: {"{{clientName}}"}, {"{{professionalName}}"},{" "}
                 {"{{serviceName}}"}, {"{{date}}"}, {"{{time}}"}, {"{{tenantName}}"}.
               </p>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void saveConfig()}
+                className="mt-4 inline-flex items-center gap-2 rounded-full border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-100 disabled:opacity-60"
+              >
+                {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+                Salvar avisos
+              </button>
             </section>
           ) : null}
 

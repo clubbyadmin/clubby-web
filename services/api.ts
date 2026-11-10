@@ -545,6 +545,7 @@ export type ApiWhatsappConnectionStatus =
   | "ERROR";
 
 export type ApiWhatsappAutomations = {
+  inboundBotEnabled: boolean | null;
   confirmationEnabled: boolean;
   reminderEnabled: boolean;
   reminderHoursBefore: number;
@@ -1650,6 +1651,19 @@ export const api = {
     });
   },
 
+  disableSuperAdminTenantInboundBot(id: string) {
+    return request<{
+      ok: boolean;
+      webhookUrl: string | null;
+      instanceName?: string;
+      message: string;
+      config?: ApiWhatsappConfig;
+    }>(`/super-admin/tenants/${id}/whatsapp/inbound-bot/disable`, {
+      method: "POST",
+      body: {},
+    });
+  },
+
   getSuperAdminTenantWhatsappLogs(id: string) {
     return request<ApiMessageLog[]>(
       `/super-admin/tenants/${id}/whatsapp/logs`,
@@ -2272,6 +2286,19 @@ export const api = {
       message: string;
       config?: ApiWhatsappConfig;
     }>(`/whatsapp/inbound-bot/enable${buildQuery({ tenantId })}`, {
+      method: "POST",
+      body: {},
+    });
+  },
+
+  disableWhatsappInboundBot(tenantId?: string) {
+    return request<{
+      ok: boolean;
+      webhookUrl: string | null;
+      instanceName?: string;
+      message: string;
+      config?: ApiWhatsappConfig;
+    }>(`/whatsapp/inbound-bot/disable${buildQuery({ tenantId })}`, {
       method: "POST",
       body: {},
     });
