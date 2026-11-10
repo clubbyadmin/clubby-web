@@ -139,14 +139,22 @@ export function WhatsappPairingCard({
         </div>
       ) : null}
 
-      {waiting && pairing?.qrcodeBase64 ? (
+      {waiting ? (
         <div className="mt-4 flex flex-col items-center gap-3 rounded-2xl border border-zinc-800 bg-white p-4 sm:flex-row sm:items-start">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={pairing.qrcodeBase64}
-            alt="QR Code WhatsApp"
-            className="size-56 rounded-xl"
-          />
+          {pairing?.qrcodeBase64 ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={pairing.qrcodeBase64}
+              alt="QR Code WhatsApp"
+              className="size-56 rounded-xl"
+            />
+          ) : (
+            <div className="flex size-56 items-center justify-center rounded-xl bg-zinc-100 text-center text-xs text-zinc-500">
+              Gerando QR…
+              <br />
+              clique em Atualizar se demorar
+            </div>
+          )}
           <div className="space-y-2 text-sm text-zinc-700">
             <p className="font-semibold text-zinc-900">Como conectar</p>
             <ol className="list-decimal space-y-1 pl-4 text-zinc-600">
@@ -154,7 +162,7 @@ export function WhatsappPairingCard({
               <li>Menu → Aparelhos conectados → Conectar aparelho</li>
               <li>Aponte a câmera para este QR</li>
             </ol>
-            {pairing.pairingCode ? (
+            {pairing?.pairingCode ? (
               <p className="rounded-xl bg-zinc-100 px-3 py-2 font-mono text-xs text-zinc-800">
                 Código de pareamento: {pairing.pairingCode}
               </p>
