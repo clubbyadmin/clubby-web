@@ -12,8 +12,8 @@ declare global {
 
 declare const self: ServiceWorkerGlobalScope;
 
-// bump: login-oauth-2026-11-10 — força troca do SW após esqueci senha + OAuth no /login
-const CACHE_REVISION = "login-oauth-2026-11-10";
+// bump: login-polish-2026-11-10 — força troca do SW após redesenho do login
+const CACHE_REVISION = "login-polish-2026-11-10";
 
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,

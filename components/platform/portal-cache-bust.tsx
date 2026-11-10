@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 
-const BUST_KEY = "clubby.cache-bust.login-oauth-2026-11-10";
+const BUST_KEY = "clubby.cache-bust.login-polish-2026-11-10";
 
-/** Uma vez: limpa SW/cache antigo que ainda servia a tela de login sem OAuth. */
+/** Uma vez: limpa SW/cache antigo após redesenho do login. */
 export function PortalCacheBust() {
   useEffect(() => {
     if (typeof window === "undefined") {

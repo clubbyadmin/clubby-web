@@ -10,7 +10,8 @@ import { isDemoMode } from "@/lib/app-mode";
 import { DEMO_PRESENTATION_LOGINS } from "@/lib/demo-logins";
 import { PLATFORM_SUPER_ADMIN_EMAIL } from "@/lib/platform-auth";
 import { api, getAccessToken, getErrorMessage } from "@/services/api";
-import { ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -23,28 +24,14 @@ type StaffProvider = "google" | "apple" | "microsoft";
 const PROVIDERS: Array<{
   id: StaffProvider;
   label: string;
-  mark: string;
-  className: string;
 }> = [
-  {
-    id: "google",
-    label: "Continuar com Google",
-    mark: "G",
-    className: "bg-white text-zinc-900 hover:bg-zinc-100",
-  },
-  {
-    id: "microsoft",
-    label: "Continuar com Outlook / Microsoft",
-    mark: "M",
-    className: "bg-[#2F2F2F] text-zinc-50 hover:bg-zinc-800 ring-1 ring-zinc-700",
-  },
-  {
-    id: "apple",
-    label: "Continuar com Apple",
-    mark: "",
-    className: "bg-zinc-100 text-zinc-950 hover:bg-white",
-  },
+  { id: "google", label: "Google" },
+  { id: "microsoft", label: "Microsoft" },
+  { id: "apple", label: "Apple" },
 ];
+
+const fieldClass =
+  "h-12 w-full rounded-2xl border border-zinc-800/90 bg-zinc-950/60 px-4 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-amber-300/50 focus:bg-zinc-950 focus:ring-2 focus:ring-amber-300/15";
 
 function readDeviceToken() {
   if (typeof window === "undefined") {
@@ -150,7 +137,6 @@ function LoginForm() {
       setError("Não foi possível concluir a entrada com a conta social.");
       clearOAuthHash();
     }
-    // finishSession is stable enough for mount-only OAuth return handling
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -325,326 +311,363 @@ function LoginForm() {
     }
   }
 
+  function backToLogin() {
+    setMode("login");
+    setChallengeId(null);
+    setCode("");
+    setPreviewCode(null);
+    setEmailHint(null);
+    setNewPassword("");
+    setConfirmPassword("");
+    setError(null);
+    setInfo(null);
+  }
+
   const title =
     mode === "change-password"
-      ? "Defina sua nova senha"
+      ? "Nova senha"
       : mode === "forgot"
-        ? "Esqueci minha senha"
+        ? "Recuperar acesso"
         : mode === "reset"
-          ? "Criar nova senha"
+          ? "Definir senha"
           : mode === "mfa"
-            ? "Confirme o acesso"
-            : "Entrar no Clubby";
+            ? "Verificação"
+            : "Acesso à gestão";
 
   const subtitle =
     mode === "change-password"
-      ? "Por segurança, troque a senha temporária antes de entrar no painel."
+      ? "Troque a senha temporária para liberar o painel."
       : mode === "forgot"
-        ? "Informe o e-mail cadastrado. Se existir conta de gestão, enviamos um código para redefinir a senha."
+        ? "Enviamos um código se o e-mail estiver cadastrado."
         : mode === "reset"
-          ? `Digite o código enviado para ${emailHint ?? "seu e-mail"} e escolha uma nova senha.`
+          ? `Código enviado para ${emailHint ?? "seu e-mail"}.`
           : mode === "mfa"
-            ? `Enviamos um código para ${emailHint ?? "seu e-mail"}. Em aparelhos conhecidos, o próximo login pode pular esta etapa.`
-            : "Super-Admin vai para o painel global. Gestores e equipe usam o e-mail cadastrado no salão.";
+            ? `Código enviado para ${emailHint ?? "seu e-mail"}.`
+            : "Painel do salão e Super-Admin em um só lugar.";
 
   const submitLabel = submitting
     ? "Aguarde..."
     : mode === "change-password"
-      ? "Salvar senha e entrar"
+      ? "Salvar e entrar"
       : mode === "forgot"
         ? "Enviar código"
         : mode === "reset"
-          ? "Salvar nova senha"
+          ? "Salvar senha"
           : mode === "mfa"
-            ? "Confirmar código"
+            ? "Confirmar"
             : "Entrar";
 
   return (
-    <div className="flex min-h-full flex-1 items-center justify-center px-5 py-16">
-      <form
-        onSubmit={(event) => void handleSubmit(event)}
-        className="w-full max-w-md rounded-3xl border border-zinc-800/80 bg-zinc-950/80 p-8 shadow-2xl shadow-black/40"
-      >
-        <div className="flex size-12 items-center justify-center rounded-2xl bg-amber-400/10 text-amber-300 ring-1 ring-amber-400/25">
-          <ShieldCheck className="size-6" strokeWidth={1.8} />
-        </div>
-        <h1 className="mt-5 text-2xl font-semibold tracking-tight text-zinc-50">
-          {title}
-        </h1>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-500">{subtitle}</p>
+    <div className="relative flex min-h-full flex-1 overflow-hidden bg-zinc-950 text-zinc-50">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(251,191,36,0.16),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(245,158,11,0.1),_transparent_45%)]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-24 top-20 size-72 rounded-full bg-amber-400/10 blur-3xl motion-safe:animate-pulse"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-20 bottom-0 size-80 rounded-full bg-orange-500/10 blur-3xl"
+      />
 
-        {mode === "change-password" ? (
-          <>
-            <label className="mt-8 block">
-              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
-                Nova senha
-              </span>
-              <input
-                type="password"
-                required
-                autoComplete="new-password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
-              />
-            </label>
-            <label className="mt-3 block">
-              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
-                Confirmar senha
-              </span>
-              <input
-                type="password"
-                required
-                autoComplete="new-password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
-              />
-            </label>
-          </>
-        ) : null}
-
-        {mode === "login" ? (
-          <>
-            <label className="mt-8 block">
-              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
-                E-mail
-              </span>
-              <input
-                type="email"
-                required
-                autoComplete="username"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
-              />
-            </label>
-            <label className="mt-3 block">
-              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
-                Senha
-              </span>
-              <input
-                type="password"
-                required
-                autoComplete="current-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
-              />
-            </label>
-            <div className="mt-2 flex justify-end">
-              <button
-                type="button"
-                className="text-xs font-semibold text-amber-300/90 hover:text-amber-200"
-                onClick={() => {
-                  setError(null);
-                  setInfo(null);
-                  setMode("forgot");
-                }}
-              >
-                Esqueci minha senha
-              </button>
-            </div>
-          </>
-        ) : null}
-
-        {mode === "forgot" ? (
-          <label className="mt-8 block">
-            <span className="mb-1.5 block text-xs font-medium text-zinc-400">
-              E-mail
+      <div className="relative mx-auto flex w-full max-w-md flex-1 flex-col px-5 py-8 sm:px-6 sm:py-12">
+        <header className="flex items-center justify-between gap-3 animate-portal-fade">
+          <Link href="/" className="flex items-center gap-3">
+            <span className="inline-flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 to-amber-500 text-base font-black text-zinc-950 shadow-lg shadow-amber-500/20">
+              C
             </span>
-            <input
-              type="email"
-              required
-              autoComplete="username"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
-            />
-          </label>
-        ) : null}
-
-        {mode === "reset" ? (
-          <>
-            <label className="mt-8 block">
-              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
-                Código de 6 dígitos
-              </span>
-              <input
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                required
-                value={code}
-                onChange={(event) => setCode(event.target.value)}
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
-              />
-              {previewCode ? (
-                <p className="mt-2 rounded-xl bg-zinc-900 px-3 py-2 text-xs text-zinc-400">
-                  Código de demonstração:{" "}
-                  <span className="font-semibold text-zinc-100">{previewCode}</span>
-                </p>
-              ) : null}
-            </label>
-            <label className="mt-3 block">
-              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
-                Nova senha
-              </span>
-              <input
-                type="password"
-                required
-                autoComplete="new-password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
-              />
-            </label>
-            <label className="mt-3 block">
-              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
-                Confirmar senha
-              </span>
-              <input
-                type="password"
-                required
-                autoComplete="new-password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
-              />
-            </label>
-          </>
-        ) : null}
-
-        {mode === "mfa" ? (
-          <label className="mt-8 block">
-            <span className="mb-1.5 block text-xs font-medium text-zinc-400">
-              Código de 6 dígitos
+            <span className="font-[family-name:var(--font-portal-display)] text-xl font-semibold tracking-tight">
+              Clubby
             </span>
-            <input
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              required
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              className="h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-amber-400/40 focus:ring-2 focus:ring-amber-400/20"
-            />
-            {previewCode ? (
-              <p className="mt-2 rounded-xl bg-zinc-900 px-3 py-2 text-xs text-zinc-400">
-                Código de demonstração:{" "}
-                <span className="font-semibold text-zinc-100">{previewCode}</span>
-              </p>
-            ) : null}
-          </label>
-        ) : null}
+          </Link>
+          {mode !== "login" && mode !== "change-password" ? (
+            <button
+              type="button"
+              onClick={backToLogin}
+              className="inline-flex items-center gap-1.5 text-sm text-zinc-400 transition hover:text-zinc-100"
+            >
+              <ArrowLeft className="size-3.5" />
+              Voltar
+            </button>
+          ) : (
+            <Link
+              href="/"
+              className="text-sm text-zinc-500 transition hover:text-zinc-200"
+            >
+              Portal
+            </Link>
+          )}
+        </header>
 
-        {info ? <p className="mt-4 text-sm text-zinc-300">{info}</p> : null}
-        {error ? <p className="mt-4 text-sm text-red-300">{error}</p> : null}
-
-        <button
-          type="submit"
-          disabled={submitting}
-          className="mt-6 w-full rounded-xl bg-amber-300 px-4 py-3 text-sm font-semibold text-zinc-950 disabled:opacity-60"
+        <form
+          onSubmit={(event) => void handleSubmit(event)}
+          className="flex flex-1 flex-col justify-center py-10 sm:py-14"
         >
-          {submitLabel}
-        </button>
-
-        {mode !== "login" && mode !== "change-password" ? (
-          <button
-            type="button"
-            className="mt-3 w-full text-xs font-semibold text-zinc-400 hover:text-zinc-200"
-            onClick={() => {
-              setMode("login");
-              setChallengeId(null);
-              setCode("");
-              setPreviewCode(null);
-              setEmailHint(null);
-              setNewPassword("");
-              setConfirmPassword("");
-              setError(null);
-              setInfo(null);
-            }}
-          >
-            Voltar ao login
-          </button>
-        ) : null}
-
-        {mode === "login" ? (
-          <>
-            <div className="mt-6 flex items-center gap-3">
-              <span className="h-px flex-1 bg-zinc-800" />
-              <span className="text-[11px] uppercase tracking-[0.14em] text-zinc-600">
-                ou
-              </span>
-              <span className="h-px flex-1 bg-zinc-800" />
-            </div>
-            <div className="mt-4 space-y-2">
-              {PROVIDERS.map((provider) => (
-                <button
-                  key={provider.id}
-                  type="button"
-                  disabled={Boolean(oauthBusy) || submitting}
-                  onClick={() => void startProvider(provider.id)}
-                  className={`flex min-h-11 w-full items-center justify-center gap-3 rounded-xl px-4 text-sm font-semibold transition disabled:opacity-60 ${provider.className}`}
-                >
-                  {provider.id === "apple" ? (
-                    <AppleMark />
-                  ) : (
-                    <span className="inline-flex size-5 items-center justify-center text-base font-bold leading-none">
-                      {provider.mark}
-                    </span>
-                  )}
-                  {oauthBusy === provider.id ? "Abrindo..." : provider.label}
-                </button>
-              ))}
-            </div>
-            <p className="mt-3 text-center text-[11px] leading-relaxed text-zinc-500">
-              Use a mesma conta social do e-mail cadastrado na gestão do salão.
+          <div className="animate-portal-fade">
+            <p className="font-[family-name:var(--font-portal-display)] text-4xl font-semibold tracking-tight text-zinc-50 sm:text-5xl">
+              Clubby
             </p>
-          </>
-        ) : null}
-
-        {isDemoMode() && mode === "login" ? (
-          <div className="mt-6 border-t border-zinc-800 pt-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-              Atalhos da demonstração
+            <h1 className="mt-3 text-lg font-medium text-zinc-100 sm:text-xl">
+              {title}
+            </h1>
+            <p className="mt-2 max-w-sm text-sm leading-relaxed text-zinc-500">
+              {subtitle}
             </p>
-            <ul className="mt-3 space-y-2">
-              {DEMO_PRESENTATION_LOGINS.map((login) => (
-                <li key={login.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail(login.email);
-                      setPassword(login.password);
-                      setError(null);
-                      setInfo(null);
-                    }}
-                    className="flex w-full items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-left hover:border-amber-400/30"
-                  >
-                    <span>
-                      <span className="block text-xs font-medium text-zinc-200">
-                        {login.label}
-                      </span>
-                      <span className="block text-[11px] text-zinc-500">
-                        {login.email}
-                      </span>
-                    </span>
-                    <span className="text-[11px] text-amber-300">
-                      {login.destination}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
           </div>
-        ) : null}
-      </form>
+
+          <div className="mt-8 space-y-4 animate-portal-rise">
+            {mode === "login" ? (
+              <>
+                <div className="grid grid-cols-3 gap-2">
+                  {PROVIDERS.map((provider) => (
+                    <button
+                      key={provider.id}
+                      type="button"
+                      disabled={Boolean(oauthBusy) || submitting}
+                      onClick={() => void startProvider(provider.id)}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/50 text-xs font-medium text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-900 disabled:opacity-50"
+                      aria-label={`Continuar com ${provider.label}`}
+                    >
+                      <ProviderIcon id={provider.id} />
+                      <span className="hidden sm:inline">
+                        {oauthBusy === provider.id ? "…" : provider.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-3 pt-1">
+                  <span className="h-px flex-1 bg-zinc-800/80" />
+                  <span className="text-[11px] tracking-[0.12em] text-zinc-600">
+                    e-mail
+                  </span>
+                  <span className="h-px flex-1 bg-zinc-800/80" />
+                </div>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                    E-mail
+                  </span>
+                  <input
+                    type="email"
+                    required
+                    autoComplete="username"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    className={fieldClass}
+                  />
+                </label>
+                <label className="block">
+                  <div className="mb-1.5 flex items-center justify-between gap-3">
+                    <span className="text-xs font-medium text-zinc-400">
+                      Senha
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-amber-300/90 transition hover:text-amber-200"
+                      onClick={() => {
+                        setError(null);
+                        setInfo(null);
+                        setMode("forgot");
+                      }}
+                    >
+                      Esqueci a senha
+                    </button>
+                  </div>
+                  <input
+                    type="password"
+                    required
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    className={fieldClass}
+                  />
+                </label>
+              </>
+            ) : null}
+
+            {mode === "forgot" ? (
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                  E-mail
+                </span>
+                <input
+                  type="email"
+                  required
+                  autoComplete="username"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  className={fieldClass}
+                />
+              </label>
+            ) : null}
+
+            {mode === "change-password" || mode === "reset" ? (
+              <>
+                {mode === "reset" ? (
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                      Código
+                    </span>
+                    <input
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      required
+                      value={code}
+                      onChange={(event) => setCode(event.target.value)}
+                      className={fieldClass}
+                    />
+                    {previewCode ? (
+                      <p className="mt-2 text-xs text-zinc-500">
+                        Demo:{" "}
+                        <span className="font-medium text-zinc-200">
+                          {previewCode}
+                        </span>
+                      </p>
+                    ) : null}
+                  </label>
+                ) : null}
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                    Nova senha
+                  </span>
+                  <input
+                    type="password"
+                    required
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    className={fieldClass}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                    Confirmar
+                  </span>
+                  <input
+                    type="password"
+                    required
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    className={fieldClass}
+                  />
+                </label>
+              </>
+            ) : null}
+
+            {mode === "mfa" ? (
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                  Código de 6 dígitos
+                </span>
+                <input
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  required
+                  value={code}
+                  onChange={(event) => setCode(event.target.value)}
+                  className={fieldClass}
+                />
+                {previewCode ? (
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Demo:{" "}
+                    <span className="font-medium text-zinc-200">{previewCode}</span>
+                  </p>
+                ) : null}
+              </label>
+            ) : null}
+
+            {info ? (
+              <p className="text-sm leading-relaxed text-zinc-400">{info}</p>
+            ) : null}
+            {error ? (
+              <p className="text-sm leading-relaxed text-red-300/95">{error}</p>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-amber-300 to-amber-500 px-6 text-sm font-semibold text-zinc-950 shadow-lg shadow-amber-500/20 transition hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
+            >
+              {submitLabel}
+              {!submitting ? <ArrowRight className="size-4" /> : null}
+            </button>
+          </div>
+
+          {isDemoMode() && mode === "login" ? (
+            <div className="mt-10 border-t border-zinc-800/80 pt-6">
+              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-600">
+                Demonstração
+              </p>
+              <ul className="mt-3 space-y-1.5">
+                {DEMO_PRESENTATION_LOGINS.map((login) => (
+                  <li key={login.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmail(login.email);
+                        setPassword(login.password);
+                        setError(null);
+                        setInfo(null);
+                      }}
+                      className="flex w-full items-center justify-between rounded-xl px-2 py-2 text-left text-sm transition hover:bg-zinc-900/70"
+                    >
+                      <span className="text-zinc-300">{login.label}</span>
+                      <span className="text-[11px] text-zinc-600">
+                        {login.destination}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </form>
+      </div>
     </div>
   );
 }
 
-function AppleMark() {
+function ProviderIcon({ id }: { id: StaffProvider }) {
+  if (id === "google") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden className="size-4">
+        <path
+          fill="#4285F4"
+          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+        />
+        <path
+          fill="#34A853"
+          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+        />
+        <path
+          fill="#FBBC05"
+          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+        />
+        <path
+          fill="#EA4335"
+          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+        />
+      </svg>
+    );
+  }
+
+  if (id === "microsoft") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden className="size-4">
+        <path fill="#F25022" d="M3 3h8.5v8.5H3z" />
+        <path fill="#7FBA00" d="M12.5 3H21v8.5h-8.5z" />
+        <path fill="#00A4EF" d="M3 12.5h8.5V21H3z" />
+        <path fill="#FFB900" d="M12.5 12.5H21V21h-8.5z" />
+      </svg>
+    );
+  }
+
   return (
-    <svg viewBox="0 0 24 24" aria-hidden className="size-5 fill-current">
+    <svg viewBox="0 0 24 24" aria-hidden className="size-4 fill-zinc-100">
       <path d="M16.365 1.43c0 1.14-.42 2.2-1.13 3.02-.74.86-1.97 1.52-3.15 1.43-.14-1.1.42-2.26 1.12-3.04.74-.86 2.04-1.5 3.16-1.41zM20.5 17.2c-.58 1.34-.86 1.93-1.61 3.11-1.05 1.64-2.53 3.68-4.37 3.7-1.63.02-2.05-1.06-4.27-1.05-2.22.01-2.68 1.07-4.32 1.05-1.84-.02-3.25-1.86-4.3-3.5C-.12 16.9-.9 12.7.95 9.78c1.16-1.84 3-2.92 4.72-2.92 1.76 0 2.87 1.08 4.33 1.08 1.41 0 2.27-1.09 4.32-1.09 1.54 0 3.17.84 4.33 2.29-3.8 2.08-3.18 7.5.85 8.06z" />
     </svg>
   );
