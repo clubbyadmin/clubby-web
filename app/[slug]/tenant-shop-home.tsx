@@ -30,6 +30,10 @@ function professionalRoleLabel(role: string) {
     return "Profissional";
   }
 
+  if (role === "ADMIN") {
+    return "Responsável";
+  }
+
   return role;
 }
 

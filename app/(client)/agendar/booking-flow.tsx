@@ -589,15 +589,20 @@ export function BookingFlow({ embedded = false }: BookingFlowProps) {
 async function fetchBookingCatalog(
   tenantId?: string,
 ): Promise<BookingCatalog> {
-  const [servicesResponse, professionalsResponse] = await Promise.all([
-    api.getServices(tenantId),
-    api.getUsers({ role: "PROFESSIONAL", tenantId }),
-  ]);
+  const [servicesResponse, professionalsResponse, adminsResponse] =
+    await Promise.all([
+      api.getServices(tenantId),
+      api.getUsers({ role: "PROFESSIONAL", tenantId }),
+      api.getUsers({ role: "ADMIN", tenantId }),
+    ]);
   const session = readStoredAdminUser();
+  const byId = new Map(
+    [...professionalsResponse, ...adminsResponse].map((user) => [user.id, user]),
+  );
 
   return {
     services: servicesResponse.map(mapApiService),
-    professionals: professionalsResponse.map(mapApiProfessional),
+    professionals: [...byId.values()].map(mapApiProfessional),
     clientId: session?.role === "CUSTOMER" ? session.id : null,
     fromApi: true,
   };

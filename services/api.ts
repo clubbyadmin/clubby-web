@@ -1648,9 +1648,9 @@ export const api = {
     });
   },
 
-  applyServiceTemplates() {
+  applyServiceTemplates(tenantId?: string) {
     return request<{ created: ApiService[]; skipped: number }>(
-      "/services/templates/apply",
+      `/services/templates/apply${buildQuery({ tenantId })}`,
       { method: "POST" },
     );
   },

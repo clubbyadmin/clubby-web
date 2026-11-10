@@ -844,10 +844,17 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
       ) : null}
 
       {tab === "whatsapp" ? (
-        <PartnerWhatsappPanel
-          partnerId={partnerId}
-          onChanged={() => void load({ soft: true })}
-        />
+        <div className="space-y-4">
+          <WhatsappStepChecklist
+            tenant={tenant}
+            partnerId={partnerId}
+            onChanged={() => void load({ soft: true })}
+          />
+          <PartnerWhatsappPanel
+            partnerId={partnerId}
+            onChanged={() => void load({ soft: true })}
+          />
+        </div>
       ) : null}
 
       {tab === "contratos" ? (
@@ -957,6 +964,78 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function WhatsappStepChecklist({
+  tenant,
+  partnerId,
+  onChanged,
+}: {
+  tenant: ApiPlatformTenant;
+  partnerId: string;
+  onChanged: () => void;
+}) {
+  const [seeding, setSeeding] = useState(false);
+  const [seedError, setSeedError] = useState<string | null>(null);
+  const [seedNotice, setSeedNotice] = useState<string | null>(null);
+  const botOk = Boolean(tenant.whatsappConfig?.isActive);
+  const serviceOk = (tenant.counts?.services ?? 0) > 0;
+
+  async function seedServices() {
+    setSeeding(true);
+    setSeedError(null);
+    setSeedNotice(null);
+    try {
+      const result = await api.applyServiceTemplates(partnerId);
+      setSeedNotice(
+        result.created.length > 0
+          ? `${result.created.length} serviços de exemplo criados. O passo WhatsApp sobe quando o bot também estiver ativo.`
+          : "Os serviços de exemplo já existiam neste salão.",
+      );
+      onChanged();
+    } catch (requestError) {
+      setSeedError(getErrorMessage(requestError));
+    } finally {
+      setSeeding(false);
+    }
+  }
+
+  return (
+    <Section title="Checklist do passo WhatsApp">
+      <p className="mb-3 text-sm text-zinc-400">
+        Este passo não usa a base de clientes (isso fica em Migração). Aqui
+        entram só o bot conectado e ao menos um serviço no catálogo — sem
+        serviço o cliente não consegue agendar.
+      </p>
+      <ul className="space-y-2 text-sm">
+        <li className={botOk ? "text-emerald-300" : "text-amber-200"}>
+          {botOk ? "✓" : "○"} Bot WhatsApp conectado
+        </li>
+        <li className={serviceOk ? "text-emerald-300" : "text-amber-200"}>
+          {serviceOk ? "✓" : "○"} Ao menos um serviço no catálogo
+          {!serviceOk ? (
+            <span className="ml-1 text-zinc-500">
+              (é isso que segura o passo em 50% se o bot já estiver ok)
+            </span>
+          ) : null}
+        </li>
+      </ul>
+      {!serviceOk ? (
+        <button
+          type="button"
+          disabled={seeding}
+          onClick={() => void seedServices()}
+          className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-300 px-4 py-2 text-xs font-semibold text-zinc-950 disabled:opacity-60"
+        >
+          {seeding ? "Criando..." : "Criar serviços de exemplo"}
+        </button>
+      ) : null}
+      {seedNotice ? (
+        <p className="mt-3 text-sm text-emerald-300">{seedNotice}</p>
+      ) : null}
+      {seedError ? <p className="mt-3 text-sm text-red-300">{seedError}</p> : null}
+    </Section>
   );
 }
 
