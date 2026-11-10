@@ -17,6 +17,8 @@ import type { TenantLifecycleStatus, TenantVertical } from "@/lib/tenant-types";
 import {
   api,
   getErrorMessage,
+  type ApiPartnerCompletenessStep,
+  type ApiPartnerCompletenessStepId,
   type ApiPartnerContract,
   type ApiPlatformPlan,
   type ApiPlatformTenant,
@@ -436,31 +438,42 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
       </div>
 
       <nav className="mb-6 flex gap-2 overflow-x-auto pb-1">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setTab(item.id)}
-            className={cn(
-              "inline-flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-xs font-semibold transition",
-              tab === item.id
-                ? "bg-amber-300 text-zinc-950"
-                : "border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-zinc-100",
-            )}
-          >
-            <span
+        {TABS.map((item) => {
+          const stepPct = stepScoreByTab(tenant, item.id).score;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTab(item.id)}
               className={cn(
-                "inline-flex size-5 items-center justify-center rounded-full text-[10px]",
+                "inline-flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-xs font-semibold transition",
                 tab === item.id
-                  ? "bg-zinc-950/15 text-zinc-950"
-                  : "bg-zinc-800 text-zinc-400",
+                  ? "bg-amber-300 text-zinc-950"
+                  : "border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-zinc-100",
               )}
             >
-              {item.step}
-            </span>
-            {item.label}
-          </button>
-        ))}
+              <span
+                className={cn(
+                  "inline-flex size-5 items-center justify-center rounded-full text-[10px]",
+                  tab === item.id
+                    ? "bg-zinc-950/15 text-zinc-950"
+                    : "bg-zinc-800 text-zinc-400",
+                )}
+              >
+                {item.step}
+              </span>
+              {item.label}
+              <span
+                className={cn(
+                  "tabular-nums",
+                  tab === item.id ? "text-zinc-950/70" : "text-zinc-500",
+                )}
+              >
+                {stepPct}%
+              </span>
+            </button>
+          );
+        })}
       </nav>
 
       {tab === "visao" ? (
@@ -470,21 +483,57 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
             description="Use as sub-telas para configurar o parceiro completo em um só lugar."
           >
             <div className="grid gap-2 sm:grid-cols-2">
-              {TABS.filter((item) => item.id !== "visao").map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setTab(item.id)}
-                  className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-left transition hover:border-amber-400/40"
-                >
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
-                    Passo {item.step}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-zinc-100">
-                    {item.label}
-                  </p>
-                </button>
-              ))}
+              {TABS.filter((item) => item.id !== "visao").map((item) => {
+                const step = stepScoreByTab(tenant, item.id);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setTab(item.id)}
+                    className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-left transition hover:border-amber-400/40"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+                          Passo {item.step}
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-zinc-100">
+                          {item.label}
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          "rounded-full px-2.5 py-1 text-xs font-bold tabular-nums",
+                          step.score >= 100
+                            ? "bg-emerald-400/15 text-emerald-300"
+                            : step.score >= 50
+                              ? "bg-amber-300/15 text-amber-200"
+                              : "bg-zinc-800 text-zinc-300",
+                        )}
+                      >
+                        {step.score}%
+                      </span>
+                    </div>
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all",
+                          step.score >= 100
+                            ? "bg-emerald-400"
+                            : step.score >= 50
+                              ? "bg-amber-300"
+                              : "bg-zinc-500",
+                        )}
+                        style={{ width: `${Math.min(100, Math.max(0, step.score))}%` }}
+                      />
+                    </div>
+                    <p className="mt-2 text-[11px] text-zinc-500">
+                      {step.done}/{step.total} itens
+                      {step.missing[0] ? ` · falta: ${step.missing[0]}` : " · completo"}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
           </Section>
 
@@ -909,4 +958,143 @@ export function PartnerDetailBoard({ partnerId }: { partnerId: string }) {
       ) : null}
     </div>
   );
+}
+
+const STEP_CHECK_KEYS: Record<ApiPartnerCompletenessStepId, string[]> = {
+  cadastro: [
+    "document",
+    "whatsappNumber",
+    "address",
+    "ownerEmail",
+    "ownerPhone",
+    "status",
+  ],
+  plano: ["verticals", "staff"],
+  whatsapp: ["whatsappBot", "service"],
+  contratos: ["contract"],
+  migracao: ["clients"],
+};
+
+function stepScoreByTab(
+  tenant: ApiPlatformTenant,
+  tab: PartnerTab,
+): Pick<ApiPartnerCompletenessStep, "score" | "done" | "total" | "missing"> {
+  if (tab === "visao") {
+    return {
+      score: tenant.completeness?.score ?? 0,
+      done: 0,
+      total: 0,
+      missing: [],
+    };
+  }
+
+  const fromApi = tenant.completeness?.steps?.find((step) => step.id === tab);
+  if (fromApi) {
+    return fromApi;
+  }
+
+  const keys = STEP_CHECK_KEYS[tab];
+  const checks = (tenant.completeness?.checks ?? []).filter((check) =>
+    keys.includes(check.key),
+  );
+
+  if (checks.length > 0) {
+    const done = checks.filter((check) => check.ok).length;
+    return {
+      score: Math.round((done / checks.length) * 100),
+      done,
+      total: checks.length,
+      missing: checks.filter((check) => !check.ok).map((check) => check.label),
+    };
+  }
+
+  // Fallback local se a API ainda não expõe steps/checks.
+  const local = localStepChecks(tenant, tab);
+  const done = local.filter((item) => item.ok).length;
+  return {
+    score: local.length === 0 ? 0 : Math.round((done / local.length) * 100),
+    done,
+    total: local.length,
+    missing: local.filter((item) => !item.ok).map((item) => item.label),
+  };
+}
+
+function localStepChecks(tenant: ApiPlatformTenant, tab: Exclude<PartnerTab, "visao">) {
+  if (tab === "cadastro") {
+    return [
+      { ok: Boolean(tenant.document?.trim()), label: "Documento (CNPJ/CPF)" },
+      {
+        ok: Boolean(tenant.whatsappNumber?.trim()),
+        label: "WhatsApp cadastrado",
+      },
+      {
+        ok: Boolean(
+          tenant.zipCode?.trim() &&
+            tenant.street?.trim() &&
+            tenant.number?.trim() &&
+            tenant.neighborhood?.trim() &&
+            tenant.city?.trim() &&
+            tenant.state?.trim(),
+        ),
+        label: "Endereço completo",
+      },
+      {
+        ok: Boolean(tenant.owner?.email?.trim()),
+        label: "E-mail do responsável",
+      },
+      {
+        ok: Boolean(tenant.owner?.phone?.trim()),
+        label: "Telefone do responsável",
+      },
+      {
+        ok: tenant.status !== "PENDING",
+        label: "Estabelecimento aprovado",
+      },
+    ];
+  }
+
+  if (tab === "plano") {
+    const checks = [
+      {
+        ok: (tenant.enabledVerticals?.length ?? 0) > 0,
+        label: "Ao menos uma vertical ativa",
+      },
+    ];
+    if (tenant.platformPlan !== "SOLO") {
+      checks.push({
+        ok: (tenant.counts?.users ?? 0) >= 2,
+        label: "Equipe além do gestor",
+      });
+    }
+    return checks;
+  }
+
+  if (tab === "whatsapp") {
+    return [
+      {
+        ok: Boolean(tenant.whatsappConfig?.isActive),
+        label: "Bot WhatsApp conectado",
+      },
+      {
+        ok: (tenant.counts?.services ?? 0) > 0,
+        label: "Ao menos um serviço",
+      },
+    ];
+  }
+
+  if (tab === "contratos") {
+    return [
+      {
+        ok: (tenant.contracts ?? []).some((item) => item.status === "ACCEPTED"),
+        label: "Contrato SaaS aceito",
+      },
+    ];
+  }
+
+  return [
+    {
+      ok: (tenant.counts?.clients ?? 0) > 0,
+      label: "Base de clientes iniciada",
+    },
+  ];
 }

@@ -95,10 +95,26 @@ export type ApiPartnerContract = {
 
 export type ApiPlatformPlan = "SOLO" | "ESSENCIAL" | "CRESCIMENTO" | "REDE";
 
+export type ApiPartnerCompletenessStepId =
+  | "cadastro"
+  | "plano"
+  | "whatsapp"
+  | "contratos"
+  | "migracao";
+
+export type ApiPartnerCompletenessStep = {
+  id: ApiPartnerCompletenessStepId;
+  score: number;
+  done: number;
+  total: number;
+  missing: string[];
+};
+
 export type ApiPartnerCompleteness = {
   score: number;
   missing: string[];
   checks: Array<{ key: string; label: string; ok: boolean }>;
+  steps?: ApiPartnerCompletenessStep[];
 };
 
 export type ApiPlatformTenant = {
