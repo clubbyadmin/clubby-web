@@ -1512,6 +1512,63 @@ export const api = {
     });
   },
 
+  loginCustomer(slug: string, email: string, password: string) {
+    return request<
+      | {
+          accessToken: string;
+          user: {
+            id: string;
+            tenantId: string;
+            name: string;
+            email: string | null;
+            phone: string;
+            role: "CUSTOMER";
+          };
+        }
+      | { pendingToken: string }
+    >("/auth/customer/login", {
+      method: "POST",
+      body: { slug, email, password },
+    });
+  },
+
+  requestCustomerPasswordReset(slug: string, email: string) {
+    return request<{
+      ok: true;
+      challengeId: string | null;
+      emailHint: string;
+      previewCode: string | null;
+      message: string;
+    }>("/auth/customer/password/forgot", {
+      method: "POST",
+      body: { slug, email },
+    });
+  },
+
+  resetCustomerPassword(payload: {
+    challengeId: string;
+    code: string;
+    newPassword: string;
+  }) {
+    return request<
+      | {
+          accessToken: string;
+          user: {
+            id: string;
+            tenantId: string;
+            name: string;
+            email: string | null;
+            phone: string;
+            role: "CUSTOMER";
+          };
+        }
+      | { pendingToken: string }
+    >("/auth/customer/password/reset", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
   startCustomerProvider(provider: "google" | "apple" | "microsoft", slug: string) {
     return request<{ url: string }>(
       `/auth/customer/start${buildQuery({ provider, slug })}`,

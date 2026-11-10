@@ -12,7 +12,14 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-type Step = "choose" | "email-code" | "phone" | "phone-code" | "ready";
+type Step =
+  | "choose"
+  | "forgot"
+  | "reset"
+  | "email-code"
+  | "phone"
+  | "phone-code"
+  | "ready";
 
 const PROVIDERS: Array<{ id: OAuthProviderId; label: string }> = [
   { id: "google", label: "Google" },
@@ -32,11 +39,16 @@ export function CustomerEntry({ embedded = false }: CustomerEntryProps) {
   const { tenant } = useTenant();
   const [step, setStep] = useState<Step>("choose");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [challengeId, setChallengeId] = useState("");
   const [pendingToken, setPendingToken] = useState("");
   const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [emailHint, setEmailHint] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [name, setName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -75,6 +87,7 @@ export function CustomerEntry({ embedded = false }: CustomerEntryProps) {
   async function run(work: () => Promise<void>) {
     setBusy(true);
     setError(null);
+    setInfo(null);
 
     try {
       await work();
@@ -103,13 +116,24 @@ export function CustomerEntry({ embedded = false }: CustomerEntryProps) {
     window.dispatchEvent(new Event("clubby-customer-session"));
   }
 
+  function continueWithPending(token: string) {
+    setPendingToken(token);
+    setCode("");
+    setPreviewCode(null);
+    setStep("phone");
+  }
+
   function goBack() {
     setError(null);
+    setInfo(null);
     setPreviewCode(null);
     setCode("");
+    setNewPassword("");
+    setConfirmPassword("");
 
-    if (step === "email-code") {
+    if (step === "forgot" || step === "reset" || step === "email-code") {
       setStep("choose");
+      setChallengeId("");
       return;
     }
 
@@ -137,28 +161,39 @@ export function CustomerEntry({ embedded = false }: CustomerEntryProps) {
   }
 
   const showBack =
-    step === "email-code" || step === "phone" || step === "phone-code";
+    step === "forgot" ||
+    step === "reset" ||
+    step === "email-code" ||
+    step === "phone" ||
+    step === "phone-code";
 
   const title =
-    step === "email-code"
-      ? "Confirme o e-mail"
-      : step === "phone"
-        ? "Seu celular"
-        : step === "phone-code"
-          ? "Confirme o celular"
-          : "Acesso do cliente";
+    step === "forgot"
+      ? "Recuperar acesso"
+      : step === "reset"
+        ? "Definir senha"
+        : step === "email-code"
+          ? "Confirme o e-mail"
+          : step === "phone"
+            ? "Seu celular"
+            : step === "phone-code"
+              ? "Confirme o celular"
+              : "Acesso do cliente";
 
   const subtitle =
-    step === "email-code"
-      ? `Código enviado para ${email || "seu e-mail"}.`
-      : step === "phone"
-        ? "Use o mesmo número do WhatsApp para achar seu cadastro."
-        : step === "phone-code"
-          ? "Digite o código enviado para o celular."
-          : "Entre para agendar e acompanhar seus horários.";
+    step === "forgot"
+      ? "Enviamos um código se o e-mail estiver cadastrado neste salão."
+      : step === "reset"
+        ? `Código enviado para ${emailHint ?? "seu e-mail"}.`
+        : step === "email-code"
+          ? `Código enviado para ${email || "seu e-mail"}.`
+          : step === "phone"
+            ? "Use o mesmo número do WhatsApp para achar seu cadastro."
+            : step === "phone-code"
+              ? "Digite o código enviado para o celular."
+              : "Entre para agendar e acompanhar seus horários.";
 
-  const initial =
-    tenant.name.trim().charAt(0).toUpperCase() || "C";
+  const initial = tenant.name.trim().charAt(0).toUpperCase() || "C";
 
   if (step === "ready" && name) {
     return (
@@ -207,7 +242,12 @@ export function CustomerEntry({ embedded = false }: CustomerEntryProps) {
         </div>
       )}
 
-      <div className={cn("space-y-4", embedded ? "mt-5" : "mt-8 animate-portal-rise")}>
+      <div
+        className={cn(
+          "space-y-4",
+          embedded ? "mt-5" : "mt-8 animate-portal-rise",
+        )}
+      >
         {step === "choose" ? (
           <>
             <div className="grid grid-cols-3 gap-2">
@@ -241,6 +281,20 @@ export function CustomerEntry({ embedded = false }: CustomerEntryProps) {
               onSubmit={(event) => {
                 event.preventDefault();
                 void run(async () => {
+                  if (password.trim()) {
+                    const result = await api.loginCustomer(
+                      tenant.slug,
+                      email,
+                      password,
+                    );
+                    if ("accessToken" in result) {
+                      rememberSession(result);
+                      return;
+                    }
+                    continueWithPending(result.pendingToken);
+                    return;
+                  }
+
                   const started = await api.startCustomerEmail(
                     tenant.slug,
                     email,
@@ -266,9 +320,151 @@ export function CustomerEntry({ embedded = false }: CustomerEntryProps) {
                   className={fieldClass}
                 />
               </label>
-              <Submit label="Continuar" busy={busy} />
+              <label className="block">
+                <div className="mb-1.5 flex items-center justify-between gap-3">
+                  <span className="text-xs font-medium text-zinc-400">
+                    Senha
+                  </span>
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-[color-mix(in_srgb,var(--accent)_92%,white)] transition hover:brightness-110"
+                    onClick={() => {
+                      setError(null);
+                      setInfo(null);
+                      setStep("forgot");
+                    }}
+                  >
+                    Esqueci a senha
+                  </button>
+                </div>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Opcional no primeiro acesso"
+                  className={fieldClass}
+                />
+              </label>
+              <Submit label="Entrar" busy={busy} />
             </form>
           </>
+        ) : null}
+
+        {step === "forgot" ? (
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void run(async () => {
+                const result = await api.requestCustomerPasswordReset(
+                  tenant.slug,
+                  email,
+                );
+                setEmailHint(result.emailHint);
+                setPreviewCode(result.previewCode);
+                setInfo(result.message);
+                if (result.challengeId) {
+                  setChallengeId(result.challengeId);
+                  setCode("");
+                  setNewPassword("");
+                  setConfirmPassword("");
+                  setStep("reset");
+                }
+              });
+            }}
+          >
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                E-mail
+              </span>
+              <input
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className={fieldClass}
+              />
+            </label>
+            <Submit label="Enviar código" busy={busy} />
+          </form>
+        ) : null}
+
+        {step === "reset" ? (
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void run(async () => {
+                if (!challengeId) {
+                  setError("Peça um novo código em “Esqueci a senha”.");
+                  setStep("forgot");
+                  return;
+                }
+                if (newPassword.length < 8) {
+                  setError("A nova senha precisa ter ao menos 8 caracteres.");
+                  return;
+                }
+                if (newPassword !== confirmPassword) {
+                  setError("A confirmação da senha não confere.");
+                  return;
+                }
+                const result = await api.resetCustomerPassword({
+                  challengeId,
+                  code,
+                  newPassword,
+                });
+                if ("accessToken" in result) {
+                  rememberSession(result);
+                  return;
+                }
+                continueWithPending(result.pendingToken);
+              });
+            }}
+          >
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                Código
+              </span>
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                required
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+                className={fieldClass}
+              />
+              <Preview code={previewCode} />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                Nova senha
+              </span>
+              <input
+                type="password"
+                required
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                className={fieldClass}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                Confirmar
+              </span>
+              <input
+                type="password"
+                required
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                className={fieldClass}
+              />
+            </label>
+            <Submit label="Salvar senha" busy={busy} />
+          </form>
         ) : null}
 
         {step === "email-code" ? (
@@ -378,6 +574,9 @@ export function CustomerEntry({ embedded = false }: CustomerEntryProps) {
           </form>
         ) : null}
 
+        {info ? (
+          <p className="text-sm leading-relaxed text-zinc-400">{info}</p>
+        ) : null}
         {error ? (
           <p className="text-sm leading-relaxed text-red-300/95">{error}</p>
         ) : null}
@@ -446,7 +645,7 @@ function Preview({ code }: { code: string | null }) {
   }
 
   return (
-    <p className="text-xs text-zinc-500">
+    <p className="mt-2 text-xs text-zinc-500">
       Demo: <span className="font-medium text-zinc-200">{code}</span>
     </p>
   );
