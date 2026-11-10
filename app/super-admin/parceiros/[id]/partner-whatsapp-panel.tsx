@@ -9,7 +9,7 @@ import {
   type ApiWhatsappConfig,
   type ApiWhatsappProvider,
 } from "@/services/api";
-import { Loader2, MessageCircle, PlugZap, Save, Send } from "lucide-react";
+import { Bot, Loader2, MessageCircle, PlugZap, Save, Send } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Field, Section } from "./partner-shared";
 
@@ -45,6 +45,7 @@ export function PartnerWhatsappPanel({
   );
   const [manualPhone, setManualPhone] = useState("");
   const [manualMessage, setManualMessage] = useState("");
+  const [enablingBot, setEnablingBot] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -100,6 +101,24 @@ export function PartnerWhatsappPanel({
       setError(getErrorMessage(requestError));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function enableInboundBot() {
+    setEnablingBot(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await api.enableSuperAdminTenantInboundBot(partnerId);
+      setNotice(result.message);
+      if (result.config) {
+        setConfig(result.config);
+      }
+      onChanged?.();
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setEnablingBot(false);
     }
   }
 
@@ -265,8 +284,39 @@ export function PartnerWhatsappPanel({
         </button>
       </Section>
 
+      <Section
+        title="Respostas quando o cliente escrever"
+        description="Ativa o bot de conversa: o cliente manda oi no WhatsApp do salão e o Clubby responde, oferece serviços e agenda."
+      >
+        <button
+          type="button"
+          disabled={enablingBot || config?.status !== "CONNECTED"}
+          onClick={() => void enableInboundBot()}
+          className="inline-flex min-h-10 items-center gap-2 rounded-full bg-emerald-400 px-4 text-sm font-semibold text-zinc-950 disabled:opacity-60"
+        >
+          {enablingBot ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Bot className="size-4" />
+          )}
+          Ativar respostas automáticas
+        </button>
+        {config?.status !== "CONNECTED" ? (
+          <p className="mt-2 text-xs text-amber-200">
+            Conecte o WhatsApp (QR) antes de ativar.
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-zinc-500">
+            Depois de ativar, mande “oi” do celular de um cliente para testar.
+          </p>
+        )}
+      </Section>
+
       {automations ? (
-        <Section title="Automações">
+        <Section
+          title="Avisos automáticos (saída)"
+          description="Mensagens que o Clubby dispara sozinho: confirmação, lembrete, aniversário e fila."
+        >
           <div className="grid gap-2 sm:grid-cols-2">
             {(
               [
@@ -302,7 +352,7 @@ export function PartnerWhatsappPanel({
             className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-full border border-zinc-700 px-4 text-sm font-semibold text-zinc-100 disabled:opacity-60"
           >
             <Save className="size-4" />
-            Salvar automações
+            Salvar avisos
           </button>
         </Section>
       ) : null}

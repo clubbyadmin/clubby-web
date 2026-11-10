@@ -19,6 +19,7 @@ import {
   type ApiWhatsappProvider,
 } from "@/services/api";
 import {
+  Bot,
   Cake,
   CalendarClock,
   Loader2,
@@ -76,6 +77,8 @@ export function WhatsappBoard() {
   const [manualMessage, setManualMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [enablingBot, setEnablingBot] = useState(false);
+  const [botNotice, setBotNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!tenantId) {
@@ -150,6 +153,26 @@ export function WhatsappBoard() {
       setSaveError(getErrorMessage(requestError));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function enableInboundBot() {
+    if (!tenantId) {
+      return;
+    }
+    setEnablingBot(true);
+    setBotNotice(null);
+    setSaveError(null);
+    try {
+      const result = await api.enableWhatsappInboundBot(tenantId);
+      setBotNotice(result.message);
+      if (result.config) {
+        setConfig(result.config);
+      }
+    } catch (requestError) {
+      setSaveError(getErrorMessage(requestError));
+    } finally {
+      setEnablingBot(false);
     }
   }
 
@@ -381,10 +404,38 @@ export function WhatsappBoard() {
             </form>
           </section>
 
+          <section className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-5">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
+              <Bot className="size-4 text-[var(--accent)]" />
+              Respostas quando o cliente escrever
+            </h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              O cliente manda “oi” no WhatsApp do salão e o Clubby responde,
+              lista serviços e agenda.
+            </p>
+            <button
+              type="button"
+              disabled={enablingBot || config?.status !== "CONNECTED"}
+              onClick={() => void enableInboundBot()}
+              className="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
+            >
+              {enablingBot ? <Loader2 className="size-4 animate-spin" /> : null}
+              Ativar respostas automáticas
+            </button>
+            {botNotice ? (
+              <p className="mt-3 text-sm text-emerald-300">{botNotice}</p>
+            ) : null}
+            {config?.status !== "CONNECTED" ? (
+              <p className="mt-2 text-xs text-amber-200">
+                Conecte o WhatsApp acima antes de ativar.
+              </p>
+            ) : null}
+          </section>
+
           {automations ? (
             <section className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-5">
               <h2 className="text-sm font-semibold text-zinc-100">
-                Mensagens automáticas
+                Avisos automáticos (saída)
               </h2>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <Toggle
