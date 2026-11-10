@@ -1,5 +1,6 @@
 "use client";
 
+import { ProviderIcon, type OAuthProviderId } from "@/components/auth/provider-icons";
 import { useTenant } from "@/contexts/tenant-context";
 import {
   readStoredAdminUser,
@@ -7,31 +8,20 @@ import {
 } from "@/lib/admin-session-storage";
 import { cn } from "@/lib/cn";
 import { api, getErrorMessage, setAccessToken } from "@/services/api";
-import { ChevronLeft, Mail, Smartphone } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
-type Step = "choose" | "email" | "email-code" | "phone" | "phone-code" | "ready";
+type Step = "choose" | "email-code" | "phone" | "phone-code" | "ready";
 
-const PROVIDERS = [
-  {
-    id: "google" as const,
-    label: "Continuar com Google",
-    mark: "G",
-    className: "bg-white text-zinc-900 hover:bg-zinc-100",
-  },
-  {
-    id: "apple" as const,
-    label: "Continuar com Apple",
-    mark: "",
-    className: "bg-zinc-100 text-zinc-950 hover:bg-white",
-  },
-  {
-    id: "microsoft" as const,
-    label: "Continuar com Microsoft",
-    mark: "M",
-    className: "bg-[#2F2F2F] text-zinc-50 hover:bg-zinc-800 ring-1 ring-zinc-700",
-  },
+const PROVIDERS: Array<{ id: OAuthProviderId; label: string }> = [
+  { id: "google", label: "Google" },
+  { id: "microsoft", label: "Microsoft" },
+  { id: "apple", label: "Apple" },
 ];
+
+const fieldClass =
+  "h-12 w-full rounded-2xl border border-zinc-800/90 bg-zinc-950/60 px-4 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-[color-mix(in_srgb,var(--accent)_50%,transparent)] focus:bg-zinc-950 focus:ring-2 focus:ring-[color-mix(in_srgb,var(--accent)_18%,transparent)]";
 
 type CustomerEntryProps = {
   /** Quando true, remove o título interno (o shell já explica). */
@@ -50,6 +40,7 @@ export function CustomerEntry({ embedded = false }: CustomerEntryProps) {
   const [name, setName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState<OAuthProviderId | null>(null);
 
   useEffect(() => {
     const stored = readStoredAdminUser();
@@ -73,7 +64,11 @@ export function CustomerEntry({ embedded = false }: CustomerEntryProps) {
     }
 
     if (token || entryError) {
-      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      window.history.replaceState(
+        null,
+        "",
+        window.location.pathname + window.location.search,
+      );
     }
   }, [tenant.id]);
 
@@ -114,11 +109,11 @@ export function CustomerEntry({ embedded = false }: CustomerEntryProps) {
     setCode("");
 
     if (step === "email-code") {
-      setStep("email");
+      setStep("choose");
       return;
     }
 
-    if (step === "email" || step === "phone") {
+    if (step === "phone") {
       setStep("choose");
       return;
     }
@@ -128,334 +123,320 @@ export function CustomerEntry({ embedded = false }: CustomerEntryProps) {
     }
   }
 
-  const showBack = step === "email" || step === "email-code" || step === "phone" || step === "phone-code";
+  async function startProvider(provider: OAuthProviderId) {
+    setError(null);
+    setOauthBusy(provider);
 
-  return (
-    <section
-      className={cn(
-        "rounded-3xl border border-zinc-800 bg-zinc-900/80 p-5",
-        embedded ? "mt-4" : "mt-8",
-      )}
-    >
-      {!embedded && step !== "ready" ? (
-        <div className="mb-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-            Entrar ou criar conta
-          </p>
-          <h2 className="mt-1 text-lg font-semibold text-zinc-50">
-            {stepTitle(step)}
-          </h2>
-          <p className="mt-1 text-sm text-zinc-400">{stepHint(step)}</p>
-          <StepDots step={step} />
-        </div>
-      ) : null}
+    try {
+      const started = await api.startCustomerProvider(provider, tenant.slug);
+      window.location.assign(started.url);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+      setOauthBusy(null);
+    }
+  }
 
-      {embedded && step !== "ready" ? (
-        <div className="mb-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Sua conta</p>
-          <p className="mt-1 text-sm text-zinc-300">
-            Entre com e-mail, Google, Apple ou Microsoft. O celular fecha a verificação.
-          </p>
-        </div>
-      ) : null}
+  const showBack =
+    step === "email-code" || step === "phone" || step === "phone-code";
 
-      {step === "ready" && name ? (
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-zinc-100">Você entrou como {name}.</p>
-          <button
-            type="button"
-            className="text-xs font-semibold text-zinc-400"
-            onClick={() => {
-              setAccessToken(null);
-              writeStoredAdminUser(null);
-              setName(null);
-              setStep("choose");
-              window.dispatchEvent(new Event("clubby-customer-session"));
-            }}
-          >
-            Sair
-          </button>
-        </div>
-      ) : null}
+  const title =
+    step === "email-code"
+      ? "Confirme o e-mail"
+      : step === "phone"
+        ? "Seu celular"
+        : step === "phone-code"
+          ? "Confirme o celular"
+          : "Acesso do cliente";
 
-      {showBack ? (
+  const subtitle =
+    step === "email-code"
+      ? `Código enviado para ${email || "seu e-mail"}.`
+      : step === "phone"
+        ? "Use o mesmo número do WhatsApp para achar seu cadastro."
+        : step === "phone-code"
+          ? "Digite o código enviado para o celular."
+          : "Entre para agendar e acompanhar seus horários.";
+
+  const initial =
+    tenant.name.trim().charAt(0).toUpperCase() || "C";
+
+  if (step === "ready" && name) {
+    return (
+      <div
+        className={cn(
+          "flex items-center justify-between gap-3",
+          embedded ? "mt-4 rounded-2xl border border-zinc-800 px-4 py-3" : "px-1",
+        )}
+      >
+        <p className="text-sm text-zinc-100">Você entrou como {name}.</p>
         <button
           type="button"
-          onClick={goBack}
-          className="mb-3 inline-flex items-center gap-1 text-xs font-semibold text-zinc-400"
+          className="text-xs font-medium text-zinc-400 transition hover:text-zinc-200"
+          onClick={() => {
+            setAccessToken(null);
+            writeStoredAdminUser(null);
+            setName(null);
+            setStep("choose");
+            window.dispatchEvent(new Event("clubby-customer-session"));
+          }}
         >
-          <ChevronLeft className="size-3.5" strokeWidth={2.4} />
-          Voltar
+          Sair
         </button>
-      ) : null}
+      </div>
+    );
+  }
 
-      {step === "choose" ? (
-        <div className="space-y-3">
+  const form = (
+    <>
+      {!embedded ? (
+        <div className="animate-portal-fade">
+          <p className="font-[family-name:var(--font-portal-display)] text-4xl font-semibold tracking-tight text-zinc-50 sm:text-5xl">
+            {tenant.name}
+          </p>
+          <h1 className="mt-3 text-lg font-medium text-zinc-100 sm:text-xl">
+            {title}
+          </h1>
+          <p className="mt-2 max-w-sm text-sm leading-relaxed text-zinc-500">
+            {subtitle}
+          </p>
+        </div>
+      ) : (
+        <div className="mb-1">
+          <h2 className="text-lg font-medium text-zinc-50">{title}</h2>
+          <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
+        </div>
+      )}
+
+      <div className={cn("space-y-4", embedded ? "mt-5" : "mt-8 animate-portal-rise")}>
+        {step === "choose" ? (
+          <>
+            <div className="grid grid-cols-3 gap-2">
+              {PROVIDERS.map((provider) => (
+                <button
+                  key={provider.id}
+                  type="button"
+                  disabled={Boolean(oauthBusy) || busy}
+                  onClick={() => void startProvider(provider.id)}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/50 text-xs font-medium text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-900 disabled:opacity-50"
+                  aria-label={`Continuar com ${provider.label}`}
+                >
+                  <ProviderIcon id={provider.id} />
+                  <span className="hidden sm:inline">
+                    {oauthBusy === provider.id ? "…" : provider.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-3 pt-1">
+              <span className="h-px flex-1 bg-zinc-800/80" />
+              <span className="text-[11px] tracking-[0.12em] text-zinc-600">
+                e-mail
+              </span>
+              <span className="h-px flex-1 bg-zinc-800/80" />
+            </div>
+
+            <form
+              className="space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void run(async () => {
+                  const started = await api.startCustomerEmail(
+                    tenant.slug,
+                    email,
+                  );
+                  setChallengeId(started.challengeId);
+                  setPreviewCode(started.previewCode);
+                  setCode("");
+                  setStep("email-code");
+                });
+              }}
+            >
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                  E-mail
+                </span>
+                <input
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="seu@email.com"
+                  className={fieldClass}
+                />
+              </label>
+              <Submit label="Continuar" busy={busy} />
+            </form>
+          </>
+        ) : null}
+
+        {step === "email-code" ? (
           <form
-            className="space-y-2"
+            className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
-              setError(null);
-              setStep("email");
+              void run(async () => {
+                const verified = await api.verifyCustomerEmail(
+                  challengeId,
+                  code,
+                );
+                setPendingToken(verified.pendingToken);
+                setCode("");
+                setPreviewCode(null);
+                setStep("phone");
+              });
             }}
           >
-            <label className="block text-xs font-medium text-zinc-400">
-              E-mail
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                Código
+              </span>
               <input
-                type="email"
+                inputMode="numeric"
+                autoComplete="one-time-code"
                 required
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="seu@email.com"
-                className="mt-1.5 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-100 outline-none focus:border-[color-mix(in_srgb,var(--accent)_45%,transparent)]"
+                autoFocus
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+                placeholder="6 dígitos"
+                className={`${fieldClass} text-center tracking-[0.28em]`}
               />
             </label>
-            <button
-              type="submit"
-              className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-strong)] text-sm font-semibold text-zinc-950"
-            >
-              <Mail className="size-4" strokeWidth={2.2} />
-              Continuar com e-mail
-            </button>
+            <Preview code={previewCode} />
+            <Submit label="Confirmar e-mail" busy={busy} />
           </form>
+        ) : null}
 
-          <div className="flex items-center gap-3 py-1">
-            <span className="h-px flex-1 bg-zinc-800" />
-            <span className="text-[11px] uppercase tracking-[0.14em] text-zinc-600">ou</span>
-            <span className="h-px flex-1 bg-zinc-800" />
-          </div>
-
-          <div className="space-y-2">
-            {PROVIDERS.map((provider) => (
-              <button
-                key={provider.id}
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    const started = await api.startCustomerProvider(provider.id, tenant.slug);
-                    window.location.assign(started.url);
-                  })
-                }
-                className={cn(
-                  "flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl px-4 text-sm font-semibold transition disabled:opacity-60",
-                  provider.className,
-                )}
-              >
-                {provider.id === "apple" ? (
-                  <AppleMark />
-                ) : (
-                  <span className="inline-flex size-5 items-center justify-center text-base font-bold leading-none">
-                    {provider.mark}
-                  </span>
-                )}
-                {busy ? "Abrindo..." : provider.label}
-              </button>
-            ))}
-          </div>
-
-          <p className="pt-1 text-center text-[11px] leading-relaxed text-zinc-500">
-            Depois pedimos o celular para achar um cadastro feito pelo WhatsApp.
-          </p>
-        </div>
-      ) : null}
-
-      {step === "email" ? (
-        <form
-          className="space-y-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void run(async () => {
-              const started = await api.startCustomerEmail(tenant.slug, email);
-              setChallengeId(started.challengeId);
-              setPreviewCode(started.previewCode);
-              setCode("");
-              setStep("email-code");
-            });
-          }}
-        >
-          <label className="block text-xs font-medium text-zinc-400">
-            E-mail
-            <input
-              type="email"
-              required
-              autoComplete="email"
-              autoFocus
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="seu@email.com"
-              className="mt-1.5 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-100 outline-none"
-            />
-          </label>
-          <Submit label="Receber código no e-mail" busy={busy} />
-        </form>
-      ) : null}
-
-      {step === "email-code" ? (
-        <form
-          className="space-y-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void run(async () => {
-              const verified = await api.verifyCustomerEmail(challengeId, code);
-              setPendingToken(verified.pendingToken);
-              setCode("");
-              setPreviewCode(null);
-              setStep("phone");
-            });
-          }}
-        >
-          <p className="text-xs text-zinc-400">
-            Digite o código enviado para <span className="text-zinc-200">{email}</span>.
-          </p>
-          <CodeField value={code} onChange={setCode} />
-          <Preview code={previewCode} />
-          <Submit label="Confirmar e-mail" busy={busy} />
-        </form>
-      ) : null}
-
-      {step === "phone" ? (
-        <form
-          className="space-y-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void run(async () => {
-              const started = await api.startCustomerPhone(pendingToken, phone);
-              setChallengeId(started.challengeId);
-              setPreviewCode(started.previewCode);
-              setCode("");
-              setStep("phone-code");
-            });
-          }}
-        >
-          <div className="flex items-start gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/80 px-3 py-3 text-xs text-zinc-400">
-            <Smartphone className="mt-0.5 size-4 shrink-0 text-[var(--accent)]" strokeWidth={2} />
-            <p>
-              Informe o mesmo celular do WhatsApp. Se você já marcou por lá, essa é a sua ficha.
-            </p>
-          </div>
-          <label className="block text-xs font-medium text-zinc-400">
-            Celular com DDD
-            <input
-              type="tel"
-              required
-              autoComplete="tel"
-              autoFocus
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
-              placeholder="11999998888"
-              className="mt-1.5 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-100 outline-none"
-            />
-          </label>
-          <Submit label="Enviar código no celular" busy={busy} />
-        </form>
-      ) : null}
-
-      {step === "phone-code" ? (
-        <form
-          className="space-y-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void run(async () => {
-              const session = await api.confirmCustomerPhone(challengeId, code);
-              rememberSession(session);
-            });
-          }}
-        >
-          <p className="text-xs text-zinc-400">
-            Digite o código enviado para o celular.
-          </p>
-          <CodeField value={code} onChange={setCode} />
-          <Preview code={previewCode} />
-          <Submit label="Concluir e entrar" busy={busy} />
-        </form>
-      ) : null}
-
-      {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
-    </section>
-  );
-}
-
-function stepTitle(step: Step) {
-  if (step === "email" || step === "email-code") {
-    return "Seu e-mail";
-  }
-
-  if (step === "phone" || step === "phone-code") {
-    return "Seu celular";
-  }
-
-  return "Como você quer entrar?";
-}
-
-function stepHint(step: Step) {
-  if (step === "email") {
-    return "Vamos enviar um código para confirmar o e-mail.";
-  }
-
-  if (step === "email-code") {
-    return "Confira a caixa de entrada e o spam.";
-  }
-
-  if (step === "phone") {
-    return "O celular liga sua conta ao WhatsApp do salão.";
-  }
-
-  if (step === "phone-code") {
-    return "Quase lá — confirme o código para liberar o agendamento.";
-  }
-
-  return "Use o e-mail ou a conta Google, Apple ou Microsoft.";
-}
-
-function StepDots({ step }: { step: Step }) {
-  const phase = step === "choose" || step === "email" || step === "email-code" ? 0 : 1;
-
-  return (
-    <div className="mt-4 flex gap-2">
-      {["Conta", "Celular"].map((label, index) => (
-        <div key={label} className="flex-1">
-          <div
-            className={cn(
-              "h-1 rounded-full",
-              index <= phase ? "bg-[var(--accent)]" : "bg-zinc-800",
-            )}
-          />
-          <p
-            className={cn(
-              "mt-1.5 text-[10px] font-medium uppercase tracking-[0.12em]",
-              index <= phase ? "text-zinc-300" : "text-zinc-600",
-            )}
+        {step === "phone" ? (
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void run(async () => {
+                const started = await api.startCustomerPhone(
+                  pendingToken,
+                  phone,
+                );
+                setChallengeId(started.challengeId);
+                setPreviewCode(started.previewCode);
+                setCode("");
+                setStep("phone-code");
+              });
+            }}
           >
-            {label}
-          </p>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                Celular com DDD
+              </span>
+              <input
+                type="tel"
+                required
+                autoComplete="tel"
+                autoFocus
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="11999998888"
+                className={fieldClass}
+              />
+            </label>
+            <Submit label="Enviar código" busy={busy} />
+          </form>
+        ) : null}
+
+        {step === "phone-code" ? (
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void run(async () => {
+                const session = await api.confirmCustomerPhone(
+                  challengeId,
+                  code,
+                );
+                rememberSession(session);
+              });
+            }}
+          >
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-zinc-400">
+                Código
+              </span>
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                required
+                autoFocus
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+                placeholder="6 dígitos"
+                className={`${fieldClass} text-center tracking-[0.28em]`}
+              />
+            </label>
+            <Preview code={previewCode} />
+            <Submit label="Concluir e entrar" busy={busy} />
+          </form>
+        ) : null}
+
+        {error ? (
+          <p className="text-sm leading-relaxed text-red-300/95">{error}</p>
+        ) : null}
+      </div>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <section className="mt-4 rounded-3xl border border-zinc-800/80 bg-zinc-950/50 p-5">
+        {showBack ? (
+          <button
+            type="button"
+            onClick={goBack}
+            className="mb-3 inline-flex items-center gap-1.5 text-sm text-zinc-400 transition hover:text-zinc-100"
+          >
+            <ArrowLeft className="size-3.5" />
+            Voltar
+          </button>
+        ) : null}
+        {form}
+      </section>
+    );
+  }
+
+  return (
+    <div className="relative flex min-h-full flex-1 flex-col px-5 py-8 sm:px-6 sm:py-10">
+      <header className="flex items-center justify-between gap-3 animate-portal-fade">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-strong)] text-base font-black text-zinc-950 shadow-lg shadow-[color-mix(in_srgb,var(--accent)_25%,transparent)]">
+            {initial}
+          </span>
+          <span className="truncate font-[family-name:var(--font-portal-display)] text-xl font-semibold tracking-tight">
+            {tenant.name}
+          </span>
         </div>
-      ))}
+        {showBack ? (
+          <button
+            type="button"
+            onClick={goBack}
+            className="inline-flex shrink-0 items-center gap-1.5 text-sm text-zinc-400 transition hover:text-zinc-100"
+          >
+            <ArrowLeft className="size-3.5" />
+            Voltar
+          </button>
+        ) : (
+          <Link
+            href="/"
+            className="shrink-0 text-sm text-zinc-500 transition hover:text-zinc-200"
+          >
+            Portal
+          </Link>
+        )}
+      </header>
+
+      <div className="flex flex-1 flex-col justify-center py-10 sm:py-14">
+        {form}
+      </div>
     </div>
-  );
-}
-
-function AppleMark() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-5 fill-current" aria-hidden>
-      <path d="M16.365 1.43c0 1.14-.42 2.2-1.2 3.02-.9.95-2.2 1.68-3.4 1.58-.14-1.1.42-2.25 1.18-3.05.9-1 2.35-1.72 3.42-1.55zM20.9 17.3c-.52 1.2-.77 1.73-1.44 2.79-.94 1.45-2.27 3.26-3.92 3.28-1.47.02-1.85-.95-3.85-.94-2 0-2.42.95-3.88.97-1.65.03-2.91-1.66-3.85-3.1-2.63-4.05-2.9-8.8-1.28-11.3 1.15-1.78 2.97-2.82 4.68-2.82 1.74 0 2.83.97 4.27.97 1.4 0 2.25-.98 4.28-.98 1.53 0 3.15.84 4.28 2.29-3.76 2.06-3.15 7.43.71 9.84z" />
-    </svg>
-  );
-}
-
-function CodeField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  return (
-    <input
-      inputMode="numeric"
-      autoComplete="one-time-code"
-      required
-      autoFocus
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      placeholder="Código de 6 dígitos"
-      className="w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-center text-lg tracking-[0.28em] text-zinc-100 outline-none"
-    />
   );
 }
 
@@ -465,8 +446,8 @@ function Preview({ code }: { code: string | null }) {
   }
 
   return (
-    <p className="rounded-2xl bg-zinc-950 px-3 py-2 text-xs text-zinc-400">
-      Código de demonstração: <span className="font-semibold text-zinc-100">{code}</span>
+    <p className="text-xs text-zinc-500">
+      Demo: <span className="font-medium text-zinc-200">{code}</span>
     </p>
   );
 }
@@ -476,9 +457,10 @@ function Submit({ label, busy }: { label: string; busy: boolean }) {
     <button
       type="submit"
       disabled={busy}
-      className="min-h-12 w-full rounded-2xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-strong)] text-sm font-semibold text-zinc-950 disabled:opacity-60"
+      className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-strong)] px-6 text-sm font-semibold text-zinc-950 shadow-lg shadow-[color-mix(in_srgb,var(--accent)_20%,transparent)] transition hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
     >
       {busy ? "Aguarde..." : label}
+      {!busy ? <ArrowRight className="size-4" /> : null}
     </button>
   );
 }

@@ -3,7 +3,6 @@
 import { CustomerEntry } from "@/app/[slug]/customer-entry";
 import { ViewSwitcher } from "@/components/shell/view-switcher";
 import { ShellGradient } from "@/components/shell/accent-ui";
-import { TenantBrand } from "@/components/tenant-brand";
 import { LoadingState } from "@/components/api-state";
 import { useTenant, useTenantThemeStyle } from "@/contexts/tenant-context";
 import {
@@ -69,18 +68,7 @@ export function ClientShell({
               {children}
             </>
           ) : (
-            <div className="flex flex-1 flex-col px-5 pb-8 pt-10">
-              <header className="flex flex-col items-center text-center">
-                <TenantBrand showTagline />
-                <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-50">
-                  {tenant.name}
-                </h1>
-                <p className="mt-3 max-w-sm text-sm leading-relaxed text-zinc-400">
-                  Entre para agendar e ver sua área. Depois confirmamos o celular para achar o cadastro do WhatsApp.
-                </p>
-              </header>
-              <CustomerEntry />
-            </div>
+            <CustomerEntry />
           )}
         </div>
         {switcherVisible ? <ViewSwitcher mode="client" /> : null}

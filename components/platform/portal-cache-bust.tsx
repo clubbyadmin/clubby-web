@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 
-const BUST_KEY = "clubby.cache-bust.platform-login-2026-11-10";
+const BUST_KEY = "clubby.cache-bust.customer-login-2026-11-10";
 
-/** Uma vez: limpa SW/cache antigo após separar Super-Admin do /login. */
+/** Uma vez: limpa SW/cache antigo após alinhar login do cliente ao padrão. */
 export function PortalCacheBust() {
   useEffect(() => {
     if (typeof window === "undefined") {
