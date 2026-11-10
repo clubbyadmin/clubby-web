@@ -74,11 +74,26 @@ export function WhatsappPairingCard({
     }
 
     const timer = window.setInterval(() => {
-      void refresh();
-    }, 4000);
+      void (async () => {
+        const result = await refresh();
+        // Mantém o QR atual na tela até conectar (status não regenera imagem).
+        if (result?.status === "WAITING_QR" && pairing.qrcodeBase64) {
+          setPairing((current) =>
+            current
+              ? {
+                  ...result,
+                  qrcodeBase64: current.qrcodeBase64,
+                  pairingCode: current.pairingCode ?? result.pairingCode,
+                  message: result.message,
+                }
+              : result,
+          );
+        }
+      })();
+    }, 5000);
 
     return () => window.clearInterval(timer);
-  }, [pairing?.status, refresh]);
+  }, [pairing?.status, pairing?.qrcodeBase64, refresh]);
 
   const connected =
     pairing?.status === "CONNECTED" || config?.status === "CONNECTED";
