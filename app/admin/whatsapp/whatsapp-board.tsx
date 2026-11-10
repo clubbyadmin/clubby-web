@@ -4,6 +4,7 @@ import { AdminNav } from "@/components/admin-nav";
 import { ErrorState, LoadingState } from "@/components/api-state";
 import { AccentIconWrap } from "@/components/shell/accent-ui";
 import { TenantBadge } from "@/components/tenant-brand";
+import { InboundBotControl } from "@/components/whatsapp/inbound-bot-control";
 import { WhatsappPairingCard } from "@/components/whatsapp/whatsapp-pairing-card";
 import { useTenant } from "@/contexts/tenant-context";
 import { isDemoMode } from "@/lib/app-mode";
@@ -170,6 +171,7 @@ export function WhatsappBoard() {
         setConfig(result.config);
         setAutomations(result.config.automations);
       }
+      await load();
     } catch (requestError) {
       setSaveError(getErrorMessage(requestError));
     } finally {
@@ -191,6 +193,7 @@ export function WhatsappBoard() {
         setConfig(result.config);
         setAutomations(result.config.automations);
       }
+      await load();
     } catch (requestError) {
       setSaveError(getErrorMessage(requestError));
     } finally {
@@ -431,47 +434,19 @@ export function WhatsappBoard() {
               <Bot className="size-4 text-[var(--accent)]" />
               Respostas quando o cliente escrever
             </h2>
-            <p className="mt-1 text-xs text-zinc-500">
+            <p className="mt-1 mb-4 text-xs text-zinc-500">
               O cliente manda “oi” no WhatsApp do salão e o Clubby responde,
               lista serviços e agenda.
             </p>
-            <p className="mt-2 text-xs text-zinc-400">
-              Status:{" "}
-              {automations?.inboundBotEnabled === true
-                ? "ativas"
-                : automations?.inboundBotEnabled === false
-                  ? "desativadas"
-                  : "não configuradas (se já ativou antes, use Desativar)"}
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={enablingBot || config?.status !== "CONNECTED"}
-                onClick={() => void enableInboundBot()}
-                className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-60"
-              >
-                {enablingBot ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : null}
-                Ativar respostas
-              </button>
-              <button
-                type="button"
-                disabled={enablingBot || config?.status !== "CONNECTED"}
-                onClick={() => void disableInboundBot()}
-                className="inline-flex items-center gap-2 rounded-full border border-zinc-600 px-4 py-2 text-sm font-semibold text-zinc-100 disabled:opacity-60"
-              >
-                Desativar respostas
-              </button>
-            </div>
-            {botNotice ? (
-              <p className="mt-3 text-sm text-emerald-300">{botNotice}</p>
-            ) : null}
-            {config?.status !== "CONNECTED" ? (
-              <p className="mt-2 text-xs text-amber-200">
-                Conecte o WhatsApp acima antes de ativar ou desativar.
-              </p>
-            ) : null}
+            <InboundBotControl
+              enabled={automations?.inboundBotEnabled}
+              busy={enablingBot}
+              connected={config?.status === "CONNECTED"}
+              notice={botNotice}
+              error={saveError}
+              onEnable={() => void enableInboundBot()}
+              onDisable={() => void disableInboundBot()}
+            />
           </section>
 
           {automations ? (
